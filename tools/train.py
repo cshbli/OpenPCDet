@@ -142,20 +142,20 @@ def main():
     if args.ckpt is not None:
         it, start_epoch = model.load_params_with_optimizer(args.ckpt, to_cpu=dist_train, optimizer=optimizer, logger=logger)
         last_epoch = start_epoch + 1
-    else:
-        ckpt_list = glob.glob(str(ckpt_dir / '*.pth'))
+    # else:
+    #     ckpt_list = glob.glob(str(ckpt_dir / '*.pth'))
               
-        if len(ckpt_list) > 0:
-            ckpt_list.sort(key=os.path.getmtime)
-            while len(ckpt_list) > 0:
-                try:
-                    it, start_epoch = model.load_params_with_optimizer(
-                        ckpt_list[-1], to_cpu=dist_train, optimizer=optimizer, logger=logger
-                    )
-                    last_epoch = start_epoch + 1
-                    break
-                except:
-                    ckpt_list = ckpt_list[:-1]
+    #     if len(ckpt_list) > 0:
+    #         ckpt_list.sort(key=os.path.getmtime)
+    #         while len(ckpt_list) > 0:
+    #             try:
+    #                 it, start_epoch = model.load_params_with_optimizer(
+    #                     ckpt_list[-1], to_cpu=dist_train, optimizer=optimizer, logger=logger
+    #                 )
+    #                 last_epoch = start_epoch + 1
+    #                 break
+    #             except:
+    #                 ckpt_list = ckpt_list[:-1]
 
     model.train()  # before wrap to DistributedDataParallel to support fixed some parameters
     if dist_train:
