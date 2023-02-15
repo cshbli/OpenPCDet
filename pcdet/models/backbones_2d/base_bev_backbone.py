@@ -78,14 +78,15 @@ class BaseBEVBackbone(nn.Module):
 
         self.num_bev_features = c_in
 
-    def forward(self, data_dict):
+    # def forward(self, data_dict):
+    def forward(self, spatial_features):
         """
         Args:
             data_dict:
                 spatial_features
         Returns:
         """
-        spatial_features = data_dict['spatial_features']
+        # spatial_features = data_dict['spatial_features']
         ups = []
         ret_dict = {}
         x = spatial_features
@@ -107,10 +108,16 @@ class BaseBEVBackbone(nn.Module):
         if len(self.deblocks) > len(self.blocks):
             x = self.deblocks[-1](x)
 
-        data_dict['spatial_features_2d'] = x
+        # data_dict['spatial_features_2d'] = x
 
+        # return data_dict
+        return (x,)
+
+    def preprocess(self, data_dict):
         return data_dict
 
+    def postprocess(self, data_dict):
+        return data_dict
 
 class BaseBEVBackboneV1(nn.Module):
     def __init__(self, model_cfg, **kwargs):

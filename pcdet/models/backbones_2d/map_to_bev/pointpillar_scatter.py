@@ -11,7 +11,8 @@ class PointPillarScatter(nn.Module):
         self.nx, self.ny, self.nz = grid_size
         assert self.nz == 1
 
-    def forward(self, batch_dict, **kwargs):
+    # def forward(self, batch_dict, **kwargs):
+    def preprocess(self, batch_dict, **kwargs):
         pillar_features, coords = batch_dict['pillar_features'], batch_dict['voxel_coords']
         batch_spatial_features = []
         batch_size = coords[:, 0].max().int().item() + 1
@@ -34,4 +35,10 @@ class PointPillarScatter(nn.Module):
         batch_spatial_features = torch.stack(batch_spatial_features, 0)
         batch_spatial_features = batch_spatial_features.view(batch_size, self.num_bev_features * self.nz, self.ny, self.nx)
         batch_dict['spatial_features'] = batch_spatial_features
+        return batch_dict
+
+    def forward(self, *args, **kwargs):
+        return args
+
+    def postprocess(self, batch_dict, **kwargs):
         return batch_dict

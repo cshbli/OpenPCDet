@@ -91,7 +91,8 @@ class PillarVFE(VFETemplate):
         paddings_indicator = actual_num.int() > max_num
         return paddings_indicator
 
-    def forward(self, batch_dict, **kwargs):
+    # def forward(self, batch_dict, **kwargs):
+    def preprocess(self, batch_dict, **kwargs):
   
         voxel_features, voxel_num_points, coords = batch_dict['voxels'], batch_dict['voxel_num_points'], batch_dict['voxel_coords']
         points_mean = voxel_features[:, :, :3].sum(dim=1, keepdim=True) / voxel_num_points.type_as(voxel_features).view(-1, 1, 1)
@@ -102,22 +103,31 @@ class PillarVFE(VFETemplate):
         f_center[:, :, 1] = voxel_features[:, :, 1] - (coords[:, 2].to(voxel_features.dtype).unsqueeze(1) * self.voxel_y + self.y_offset)
         f_center[:, :, 2] = voxel_features[:, :, 2] - (coords[:, 1].to(voxel_features.dtype).unsqueeze(1) * self.voxel_z + self.z_offset)
 
-        if self.use_absolute_xyz:
-            features = [voxel_features, f_cluster, f_center]
-        else:
-            features = [voxel_features[..., 3:], f_cluster, f_center]
+        # if self.use_absolute_xyz:
+        #     features = [voxel_features, f_cluster, f_center]
+        # else:
+        #     features = [voxel_features[..., 3:], f_cluster, f_center]
 
-        if self.with_distance:
-            points_dist = torch.norm(voxel_features[:, :, :3], 2, 2, keepdim=True)
-            features.append(points_dist)
+        # if self.with_distance:
+        #     points_dist = torch.norm(voxel_features[:, :, :3], 2, 2, keepdim=True)
+        #     features.append(points_dist)
+        features = [voxel_features[..., 3:], f_center]
         features = torch.cat(features, dim=-1)
 
         voxel_count = features.shape[1]
         mask = self.get_paddings_indicator(voxel_num_points, voxel_count, axis=0)
         mask = torch.unsqueeze(mask, -1).type_as(voxel_features)
         features *= mask
-        for pfn in self.pfn_layers:
-            features = pfn(features)
+        # for pfn in self.pfn_layers:
+        #     features = pfn(features)
         features = features.squeeze()
+        # Changes for forward() to preprocess()->forward()->postprocess()
+        features = features.view(-1, 128)
         batch_dict['pillar_features'] = features
+        return batch_dict
+
+    def forward(self, *args, **kwargs):
+        return args
+
+    def postprocess(self, batch_dict, **kwargs):
         return batch_dict

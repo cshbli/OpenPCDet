@@ -62,7 +62,10 @@ def eval_one_epoch(cfg, args, model, dataloader, epoch_id, logger, dist_test=Fal
             start_time = time.time()
 
         with torch.no_grad():
-            pred_dicts, ret_dict = model(batch_dict)
+            # pred_dicts, ret_dict = model(batch_dict)
+            batch_dict = model.preprocess(batch_dict)
+            batch_dict['cls_preds'], batch_dict['box_preds'], batch_dict['dir_cls_preds'] = model(batch_dict['spatial_features'])
+            pred_dicts, ret_dict = model.postprocess(batch_dict)
 
         disp_dict = {}
 
