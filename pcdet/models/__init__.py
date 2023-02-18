@@ -5,13 +5,6 @@ import torch
 
 from .detectors import build_detector
 
-try:
-    import kornia
-except:
-    pass 
-    # print('Warning: kornia is not installed. This package is only required by CaDDN')
-
-
 
 def build_network(model_cfg, num_class, dataset):
     model = build_detector(
@@ -24,14 +17,9 @@ def load_data_to_gpu(batch_dict):
     for key, val in batch_dict.items():
         if not isinstance(val, np.ndarray):
             continue
-        elif key in ['frame_id', 'metadata', 'calib']:
+        if key in ['frame_id', 'metadata', 'calib', 'image_shape']:
             continue
-        elif key in ['images']:
-            batch_dict[key] = kornia.image_to_tensor(val).float().cuda().contiguous()
-        elif key in ['image_shape']:
-            batch_dict[key] = torch.from_numpy(val).int().cuda()
-        else:
-            batch_dict[key] = torch.from_numpy(val).float().cuda()
+        batch_dict[key] = torch.from_numpy(val).float().cuda()
 
 
 def model_fn_decorator():
@@ -39,7 +27,12 @@ def model_fn_decorator():
 
     def model_func(model, batch_dict):
         load_data_to_gpu(batch_dict)
-        ret_dict, tb_dict, disp_dict = model(batch_dict)
+        #ret_dict, tb_dict, disp_dict = model(batch_dict)
+        batch_dict = model.preprocess(batch_dict)
+        (
+        batch_dict['cls_preds'], batch_dict['box_preds'], batch_dict['dir_cls_preds']
+        ) = model(batch_dict['spatial_features'])
+        ret_dict, tb_dict, disp_dict = model.postprocess(batch_dict)
 
         loss = ret_dict['loss'].mean()
         if hasattr(model, 'update_global_step'):

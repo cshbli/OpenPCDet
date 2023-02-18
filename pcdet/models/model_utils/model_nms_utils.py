@@ -14,6 +14,7 @@ def class_agnostic_nms(box_scores, box_preds, nms_config, score_thresh=None):
     if box_scores.shape[0] > 0:
         box_scores_nms, indices = torch.topk(box_scores, k=min(nms_config.NMS_PRE_MAXSIZE, box_scores.shape[0]))
         boxes_for_nms = box_preds[indices]
+        # print("boxes_for_nms", boxes_for_nms.shape)
         keep_idx, selected_scores = getattr(iou3d_nms_utils, nms_config.NMS_TYPE)(
                 boxes_for_nms[:, 0:7], box_scores_nms, nms_config.NMS_THRESH, **nms_config
         )
@@ -44,7 +45,6 @@ def multi_classes_nms(cls_scores, box_preds, nms_config, score_thresh=None):
             cur_box_preds = box_preds[scores_mask]
         else:
             box_scores = cls_scores[:, k]
-            cur_box_preds = box_preds
 
         selected = []
         if box_scores.shape[0] > 0:

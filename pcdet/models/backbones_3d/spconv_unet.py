@@ -210,3 +210,4 @@ class UNetV2(nn.Module):
         )
         batch_dict['point_coords'] = torch.cat((x_up1.indices[:, 0:1].float(), point_coords), dim=1)
         return batch_dict
+

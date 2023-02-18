@@ -289,5 +289,5 @@ class VoxelResBackBone8x(nn.Module):
                 'x_conv4': 8,
             }
         })
-        
+
         return batch_dict

@@ -4,10 +4,9 @@ import pickle
 import numpy as np
 from skimage import io
 
-from . import kitti_utils
-from ...ops.roiaware_pool3d import roiaware_pool3d_utils
-from ...utils import box_utils, calibration_kitti, common_utils, object3d_kitti
 from ..dataset import DatasetTemplate
+from ...ops.roiaware_pool3d import roiaware_pool3d_utils
+from ...utils import box_utils, calibration_kitti, common_utils, object3d_kitti, box_utils_center_net
 
 
 class KittiDataset(DatasetTemplate):
@@ -31,6 +30,15 @@ class KittiDataset(DatasetTemplate):
 
         self.kitti_infos = []
         self.include_kitti_data(self.mode)
+        # print(dataset_cfg.CENTER_HEAD_CONFIG.reformat_data_by_center)
+        # raise NotImplementedError
+        # # TODO(Xunfei): we need to adjust here
+        # assigner_cfg = self.dataset_cfg.CENTER_HEAD_CONFIG
+        # self.out_size_factor = assigner_cfg.out_size_factor
+        # self.tasks = assigner_cfg.tasks
+        # self.gaussian_overlap = assigner_cfg.gaussian_overlap
+        # self._max_objs = assigner_cfg.max_objs
+        # self._min_radius = assigner_cfg.min_radius
 
     def include_kitti_data(self, mode):
         if self.logger is not None:
@@ -52,7 +60,8 @@ class KittiDataset(DatasetTemplate):
 
     def set_split(self, split):
         super().__init__(
-            dataset_cfg=self.dataset_cfg, class_names=self.class_names, training=self.training, root_path=self.root_path, logger=self.logger
+            dataset_cfg=self.dataset_cfg, class_names=self.class_names, training=self.training,
+            root_path=self.root_path, logger=self.logger
         )
         self.split = split
         self.root_split_path = self.root_path / ('training' if self.split != 'test' else 'testing')
@@ -65,21 +74,6 @@ class KittiDataset(DatasetTemplate):
         assert lidar_file.exists()
         return np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, 4)
 
-    def get_image(self, idx):
-        """
-        Loads image for a sample
-        Args:
-            idx: int, Sample index
-        Returns:
-            image: (H, W, 3), RGB Image
-        """
-        img_file = self.root_split_path / 'image_2' / ('%s.png' % idx)
-        assert img_file.exists()
-        image = io.imread(img_file)
-        image = image.astype(np.float32)
-        image /= 255.0
-        return image
-
     def get_image_shape(self, idx):
         img_file = self.root_split_path / 'image_2' / ('%s.png' % idx)
         assert img_file.exists()
@@ -89,21 +83,6 @@ class KittiDataset(DatasetTemplate):
         label_file = self.root_split_path / 'label_2' / ('%s.txt' % idx)
         assert label_file.exists()
         return object3d_kitti.get_objects_from_label(label_file)
-
-    def get_depth_map(self, idx):
-        """
-        Loads depth map for a sample
-        Args:
-            idx: str, Sample index
-        Returns:
-            depth: (H, W), Depth map
-        """
-        depth_file = self.root_split_path / 'depth_2' / ('%s.png' % idx)
-        assert depth_file.exists()
-        depth = io.imread(depth_file)
-        depth = depth.astype(np.float32)
-        depth /= 256.0
-        return depth
 
     def get_calib(self, idx):
         calib_file = self.root_split_path / 'calib' / ('%s.txt' % idx)
@@ -289,6 +268,7 @@ class KittiDataset(DatasetTemplate):
         Returns:
 
         """
+
         def get_template_prediction(num_samples):
             ret_dict = {
                 'name': np.zeros(num_samples), 'truncated': np.zeros(num_samples),
@@ -308,7 +288,8 @@ class KittiDataset(DatasetTemplate):
                 return pred_dict
 
             calib = batch_dict['calib'][batch_index]
-            image_shape = batch_dict['image_shape'][batch_index].cpu().numpy()
+            image_shape = batch_dict['image_shape'][batch_index]
+
             pred_boxes_camera = box_utils.boxes3d_lidar_to_kitti_camera(pred_boxes, calib)
             pred_boxes_img = box_utils.boxes3d_kitti_camera_to_imageboxes(
                 pred_boxes_camera, calib, image_shape=image_shape
@@ -327,6 +308,7 @@ class KittiDataset(DatasetTemplate):
 
         annos = []
         for index, box_dict in enumerate(pred_dicts):
+            # print("shape", box_dict['pred_boxes'].shape)
             frame_id = batch_dict['frame_id'][index]
 
             single_pred_dict = generate_single_sample_dict(index, box_dict)
@@ -350,6 +332,11 @@ class KittiDataset(DatasetTemplate):
 
         return annos
 
+    @staticmethod
+    def limit_period(val, offset=0.5, period=np.pi):
+        print("NotImplementedError: resort to box_utils_center_net")
+        raise NotImplementedError
+
     def evaluation(self, det_annos, class_names, **kwargs):
         if 'annos' not in self.kitti_infos[0].keys():
             return None, {}
@@ -362,6 +349,108 @@ class KittiDataset(DatasetTemplate):
 
         return ap_result_str, ap_dict
 
+    @staticmethod
+    def convert_center_net_detection_to_kitti_annos(batch_dict, pred_dicts, class_names, output_path=None):
+        def get_template_prediction(num_samples):
+            ret_dict = {
+                'name': np.full(num_samples, "PLACEHOLDER"), 'truncated': np.zeros(num_samples),
+                'occluded': np.zeros(num_samples), 'alpha': np.zeros(num_samples),
+                'bbox': np.zeros([num_samples, 4]), 'dimensions': np.zeros([num_samples, 3]),
+                'location': np.zeros([num_samples, 3]), 'rotation_y': np.zeros(num_samples),
+                'score': np.zeros(num_samples), 'boxes_lidar': np.zeros([num_samples, 7])
+            }
+            return ret_dict
+
+        def generate_single_sample_dict(batch_index, box_dict):
+            pred_scores = box_dict['pred_scores'].cpu().numpy()
+            final_box_preds = box_dict['pred_boxes'].cpu().numpy()
+            pred_labels = box_dict['pred_labels'].cpu().numpy()
+            pred_dict = get_template_prediction(pred_scores.shape[0])
+            if pred_scores.shape[0] == 0:
+                return pred_dict
+
+            calib = batch_dict['calib'][batch_index]
+
+            # final_box_preds[:, -1] = -1 * (final_box_preds[:, -1] + np.pi / 2)
+            # final_box_preds[:, -1] = box_utils_center_net.limit_period(
+            #     final_box_preds[:, -1], offset=0.5, period=np.pi * 2,
+            # )
+
+            # boxes[:, -1] = -boxes[:, -1] - np.pi /2
+
+            final_box_preds[:, 2] -= final_box_preds[:, 5] / 2
+
+            box3d_camera = box_utils_center_net.box_lidar_with_velocity_to_camera(final_box_preds, calib)
+
+            camera_box_origin = [0.5, 1.0, 0.5]
+            box_corners = box_utils_center_net.center_to_corner_box3d(
+                box3d_camera[:, :3],
+                box3d_camera[:, 3:6],
+                box3d_camera[:, 6],
+                camera_box_origin,
+                axis=1,
+            )
+
+            box_corners_in_image = box_utils_center_net.project_to_image(box_corners, calib)
+            minxy = np.min(box_corners_in_image, axis=1)
+            maxxy = np.max(box_corners_in_image, axis=1)
+            bbox = np.concatenate([minxy, maxxy], axis=1)
+            num_example = 0
+            for j in range(box3d_camera.shape[0]):
+                image_shape = batch_dict['image_shape'][batch_index]
+                if bbox[j, 0] > image_shape[1] or bbox[j, 1] > image_shape[0]:
+                    continue
+                if bbox[j, 2] < 0 or bbox[j, 3] < 0:
+                    continue
+                bbox[j, 2:] = np.minimum(bbox[j, 2:], image_shape[::-1])
+                bbox[j, :2] = np.maximum(bbox[j, :2], [0, 0])
+
+                pred_dict["bbox"][j, :] = bbox[j]
+                pred_dict["alpha"][j] = 0
+            # anno["dimensions"].append(box3d_camera[j, [4, 5, 3]])
+                pred_dict["dimensions"][j, :] = box3d_camera[j, 3:6]
+                pred_dict["location"][j, :] = box3d_camera[j, :3]
+                pred_dict["name"][j] = np.array(class_names)[pred_labels[j]]
+                if pred_dict["name"][j] == "Car":
+                    pred_dict["rotation_y"][j] = box3d_camera[j, 6] - np.pi / 2
+                else:
+                    pred_dict["rotation_y"][j] = box3d_camera[j, 6] - np.pi / 2
+
+
+                pred_dict["truncated"][j] = 0.0
+                pred_dict["occluded"][j] = 0
+                pred_dict["score"][j] = pred_scores[j]
+
+                num_example += 1
+            # print("np.array(class_names)", pred_dict["name"])
+            return pred_dict
+
+        annos = []
+        for index, box_dict in enumerate(pred_dicts):
+            # print("shape", box_dict['pred_boxes'].shape)
+            frame_id = batch_dict['frame_id'][index]
+
+            single_pred_dict = generate_single_sample_dict(index, box_dict)
+            single_pred_dict['frame_id'] = frame_id
+            annos.append(single_pred_dict)
+
+            if output_path is not None:
+                cur_det_file = output_path / ('%s.txt' % frame_id)
+                with open(cur_det_file, 'w') as f:
+                    bbox = single_pred_dict['bbox']
+                    loc = single_pred_dict['location']
+                    dims = single_pred_dict['dimensions']  # lhw -> hwl
+
+                    for idx in range(len(bbox)):
+                        print('%s -1 -1 %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f %.4f'
+                              % (single_pred_dict['name'][idx], single_pred_dict['alpha'][idx],
+                                 bbox[idx][0], bbox[idx][1], bbox[idx][2], bbox[idx][3],
+                                 dims[idx][1], dims[idx][2], dims[idx][0], loc[idx][0],
+                                 loc[idx][1], loc[idx][2], single_pred_dict['rotation_y'][idx],
+                                 single_pred_dict['score'][idx]), file=f)
+
+        return annos
+
     def __len__(self):
         if self._merge_all_iters_to_one_epoch:
             return len(self.kitti_infos) * self.total_epochs
@@ -370,111 +459,133 @@ class KittiDataset(DatasetTemplate):
 
     def __getitem__(self, index):
         # index = 4
+        np.set_printoptions(suppress=True)
         if self._merge_all_iters_to_one_epoch:
             index = index % len(self.kitti_infos)
 
         info = copy.deepcopy(self.kitti_infos[index])
 
         sample_idx = info['point_cloud']['lidar_idx']
-        img_shape = info['image']['image_shape']
-        calib = self.get_calib(sample_idx)
-        get_item_list = self.dataset_cfg.get('GET_ITEM_LIST', ['points'])
 
+        points = self.get_lidar(sample_idx)
+        calib = self.get_calib(sample_idx)
+
+        img_shape = info['image']['image_shape']
+        if self.dataset_cfg.FOV_POINTS_ONLY:
+            pts_rect = calib.lidar_to_rect(points[:, 0:3])
+
+            fov_flag = self.get_fov_flag(pts_rect, img_shape, calib)
+            points = points[fov_flag]
+
+        # print("dadasda", points)
         input_dict = {
+            'points': points,
             'frame_id': sample_idx,
             'calib': calib,
         }
 
         if 'annos' in info:
             annos = info['annos']
+            # annos is a single frame
+
             annos = common_utils.drop_info_with_name(annos, name='DontCare')
             loc, dims, rots = annos['location'], annos['dimensions'], annos['rotation_y']
             gt_names = annos['name']
+            # x y z l h w
             gt_boxes_camera = np.concatenate([loc, dims, rots[..., np.newaxis]], axis=1).astype(np.float32)
-            gt_boxes_lidar = box_utils.boxes3d_kitti_camera_to_lidar(gt_boxes_camera, calib)
 
+            # if self.dataset_cfg.get("CENTER_HEAD_CONFIG") and \
+            #         self.dataset_cfg.CENTER_HEAD_CONFIG.reformat_data_by_center:
+            #     # center_net specific loading process
+            #     # x y z in center positions, w, l, h, r
+            #     gt_boxes_lidar = box_utils_center_net.box_camera_to_lidar(gt_boxes_camera, calib)
+            #     box_utils_center_net.change_box3d_center_(
+            #         gt_boxes_lidar, [0.5, 0.5, 0], [0.5, 0.5, 0.5]
+            #     )
+            #     # print("pre", gt_boxes_lidar)
+            #     # r = copy.deepcopy(gt_boxes_lidar[:, -1])
+            #     # r = -r - np.pi / 2
+            #     # gt_boxes_lidar[:, -1] = r
+            # else:
+            #     # x y z in center positions, l, w, h, r
+            #     gt_boxes_lidar = box_utils.boxes3d_kitti_camera_to_lidar(gt_boxes_camera, calib)
+            gt_boxes_lidar = box_utils.boxes3d_kitti_camera_to_lidar(gt_boxes_camera, calib)
             input_dict.update({
                 'gt_names': gt_names,
-                'gt_boxes': gt_boxes_lidar
+                'gt_boxes': gt_boxes_lidar,
             })
-            if "gt_boxes2d" in get_item_list:
-                input_dict['gt_boxes2d'] = annos["bbox"]
 
+            # print("gt", input_dict["gt_boxes"])
             road_plane = self.get_road_plane(sample_idx)
             if road_plane is not None:
                 input_dict['road_plane'] = road_plane
 
-        if "points" in get_item_list:
-            points = self.get_lidar(sample_idx)
-            if self.dataset_cfg.FOV_POINTS_ONLY:
-                pts_rect = calib.lidar_to_rect(points[:, 0:3])
-                fov_flag = self.get_fov_flag(pts_rect, img_shape, calib)
-                points = points[fov_flag]
-            input_dict['points'] = points
-
-        if "images" in get_item_list:
-            input_dict['images'] = self.get_image(sample_idx)
-
-        if "depth_maps" in get_item_list:
-            input_dict['depth_maps'] = self.get_depth_map(sample_idx)
-
-        if "calib_matricies" in get_item_list:
-            input_dict["trans_lidar_to_cam"], input_dict["trans_cam_to_img"] = kitti_utils.calib_to_matricies(calib)
-
-        input_dict['calib'] = calib
         data_dict = self.prepare_data(data_dict=input_dict)
 
         data_dict['image_shape'] = img_shape
+        data_dict['frame_idx'] = int(sample_idx)
+        # if self.dataset_cfg.CENTER_HEAD_CONFIG.reformat_data_by_center:
+        #     r = copy.deepcopy(data_dict["gt_boxes"][:, -2])
+        #     r = -r - np.pi / 2
+        #     data_dict["gt_boxes"][:, -2] = r
+        #     data_dict["gt_boxes"][:, -2] = box_utils_center_net.limit_period(
+        #         data_dict["gt_boxes"][:, -2], offset=0.5, period=np.pi * 2,
+        #     )
+        # print("data_dict", data_dict["gt_boxes"])
         return data_dict
 
 
 def create_kitti_infos(dataset_cfg, class_names, data_path, save_path, workers=4):
-    dataset = KittiDataset(dataset_cfg=dataset_cfg, class_names=class_names, root_path=data_path, training=False)
-    train_split, val_split = 'train', 'val'
+        dataset = KittiDataset(dataset_cfg=dataset_cfg, class_names=class_names, root_path=data_path, training=False)
+        train_split, val_split = 'train', 'val'
 
-    train_filename = save_path / ('kitti_infos_%s.pkl' % train_split)
-    val_filename = save_path / ('kitti_infos_%s.pkl' % val_split)
-    trainval_filename = save_path / 'kitti_infos_trainval.pkl'
-    test_filename = save_path / 'kitti_infos_test.pkl'
+        train_filename = save_path / ('kitti_infos_%s.pkl' % train_split)
+        val_filename = save_path / ('kitti_infos_%s.pkl' % val_split)
+        trainval_filename = save_path / 'kitti_infos_trainval.pkl'
+        test_filename = save_path / 'kitti_infos_test.pkl'
 
-    print('---------------Start to generate data infos---------------')
+        print('---------------Start to generate data infos---------------')
+        '''
 
-    dataset.set_split(train_split)
-    kitti_infos_train = dataset.get_infos(num_workers=workers, has_label=True, count_inside_pts=True)
-    with open(train_filename, 'wb') as f:
-        pickle.dump(kitti_infos_train, f)
-    print('Kitti info train file is saved to %s' % train_filename)
+        dataset.set_split(train_split)
+        kitti_infos_train = dataset.get_infos(num_workers=workers, has_label=True, count_inside_pts=True)
+        with open(train_filename, 'wb') as f:
+            pickle.dump(kitti_infos_train, f)
+        print('Kitti info train file is saved to %s' % train_filename)
 
-    dataset.set_split(val_split)
-    kitti_infos_val = dataset.get_infos(num_workers=workers, has_label=True, count_inside_pts=True)
-    with open(val_filename, 'wb') as f:
-        pickle.dump(kitti_infos_val, f)
-    print('Kitti info val file is saved to %s' % val_filename)
+        dataset.set_split(val_split)
+        kitti_infos_val = dataset.get_infos(num_workers=workers, has_label=True, count_inside_pts=True)
+        with open(val_filename, 'wb') as f:
+            pickle.dump(kitti_infos_val, f)
+        print('Kitti info val file is saved to %s' % val_filename)
 
-    with open(trainval_filename, 'wb') as f:
-        pickle.dump(kitti_infos_train + kitti_infos_val, f)
-    print('Kitti info trainval file is saved to %s' % trainval_filename)
+        with open(trainval_filename, 'wb') as f:
+            pickle.dump(kitti_infos_train + kitti_infos_val, f)
+        print('Kitti info trainval file is saved to %s' % trainval_filename)
 
-    dataset.set_split('test')
-    kitti_infos_test = dataset.get_infos(num_workers=workers, has_label=False, count_inside_pts=False)
-    with open(test_filename, 'wb') as f:
-        pickle.dump(kitti_infos_test, f)
-    print('Kitti info test file is saved to %s' % test_filename)
+        dataset.set_split('test')
+        kitti_infos_test = dataset.get_infos(num_workers=workers, has_label=False, count_inside_pts=False)
+        with open(test_filename, 'wb') as f:
+            pickle.dump(kitti_infos_test, f)
+        print('Kitti info test file is saved to %s' % test_filename)
+        '''
 
-    print('---------------Start create groundtruth database for data augmentation---------------')
-    dataset.set_split(train_split)
-    dataset.create_groundtruth_database(train_filename, split=train_split)
+        print('---------------Start create groundtruth database for data augmentation---------------')
+        dataset.set_split(train_split)
+        dataset.create_groundtruth_database(train_filename, split=train_split)
 
-    print('---------------Data preparation Done---------------')
+        print('---------------Data preparation Done---------------')
 
 
 if __name__ == '__main__':
     import sys
+
     if sys.argv.__len__() > 1 and sys.argv[1] == 'create_kitti_infos':
         import yaml
         from pathlib import Path
         from easydict import EasyDict
-        dataset_cfg = EasyDict(yaml.safe_load(open(sys.argv[2])))
+
+        dataset_cfg = EasyDict(yaml.load(open(sys.argv[2])))
         ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
         create_kitti_infos(
             dataset_cfg=dataset_cfg,

@@ -8,6 +8,10 @@ import tqdm
 from pcdet.models import load_data_to_gpu
 from pcdet.utils import common_utils
 
+import random
+random.seed(0)
+torch.manual_seed(0)
+np.random.seed(0)
 
 def statistics_info(cfg, ret_dict, metric, disp_dict):
     for cur_thresh in cfg.MODEL.POST_PROCESSING.RECALL_THRESH_LIST:
@@ -19,12 +23,15 @@ def statistics_info(cfg, ret_dict, metric, disp_dict):
         '(%d, %d) / %d' % (metric['recall_roi_%s' % str(min_thresh)], metric['recall_rcnn_%s' % str(min_thresh)], metric['gt_num'])
 
 
-def eval_one_epoch(cfg, args, model, dataloader, epoch_id, logger, dist_test=False, result_dir=None):
-    result_dir.mkdir(parents=True, exist_ok=True)
+def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, save_to_file=False, result_dir=None):
+    if result_dir is not None:
+        result_dir.mkdir(parents=True, exist_ok=True)
 
-    final_output_dir = result_dir / 'final_result' / 'data'
-    if args.save_to_file:
-        final_output_dir.mkdir(parents=True, exist_ok=True)
+        final_output_dir = result_dir / 'final_result' / 'data'
+        if save_to_file:
+            final_output_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        final_output_dir = None
 
     metric = {
         'gt_num': 0,
@@ -37,10 +44,6 @@ def eval_one_epoch(cfg, args, model, dataloader, epoch_id, logger, dist_test=Fal
     class_names = dataset.class_names
     det_annos = []
 
-    if getattr(args, 'infer_time', False):
-        start_iter = int(len(dataloader) * 0.1)
-        infer_time_meter = common_utils.AverageMeter()
-
     logger.info('*************** EPOCH %s EVALUATION *****************' % epoch_id)
     if dist_test:
         num_gpus = torch.cuda.device_count()
@@ -51,37 +54,39 @@ def eval_one_epoch(cfg, args, model, dataloader, epoch_id, logger, dist_test=Fal
                 broadcast_buffers=False
         )
     model.eval()
-
+    # pred_list = []
     if cfg.LOCAL_RANK == 0:
         progress_bar = tqdm.tqdm(total=len(dataloader), leave=True, desc='eval', dynamic_ncols=True)
     start_time = time.time()
     for i, batch_dict in enumerate(dataloader):
         load_data_to_gpu(batch_dict)
-
-        if getattr(args, 'infer_time', False):
-            start_time = time.time()
-
         with torch.no_grad():
-            pred_dicts, ret_dict = model(batch_dict)
-
+            batch_dict = model.preprocess(batch_dict)
+        with torch.no_grad():
+            (
+                batch_dict['cls_preds'], batch_dict['box_preds'], batch_dict['dir_cls_preds']
+            ) = model(batch_dict['spatial_features'])
+            pred_dicts, ret_dict = model.postprocess(batch_dict)
+            # for i in range(len(pred_dicts)):
+            #     pred_dicts[i]['frame_id'] = batch_dict['frame_id'][i]
+            # pred_list.append(pred_dicts)
+            # pred_dicts, ret_dict = model(batch_dict)
         disp_dict = {}
-
-        if getattr(args, 'infer_time', False):
-            inference_time = time.time() - start_time
-            infer_time_meter.update(inference_time * 1000)
-            # use ms to measure inference time
-            disp_dict['infer_time'] = f'{infer_time_meter.val:.2f}({infer_time_meter.avg:.2f})'
 
         statistics_info(cfg, ret_dict, metric, disp_dict)
         annos = dataset.generate_prediction_dicts(
             batch_dict, pred_dicts, class_names,
-            output_path=final_output_dir if args.save_to_file else None
+            output_path=final_output_dir if save_to_file else None
         )
         det_annos += annos
         if cfg.LOCAL_RANK == 0:
             progress_bar.set_postfix(disp_dict)
             progress_bar.update()
 
+    # print('saving visualization pickles')
+    # f_pred_dicts = open('./eval_pred_list_float.pkl', 'wb')
+    # pickle.dump(pred_list, f_pred_dicts)
+    # f_pred_dicts.close()
     if cfg.LOCAL_RANK == 0:
         progress_bar.close()
 
@@ -119,8 +124,9 @@ def eval_one_epoch(cfg, args, model, dataloader, epoch_id, logger, dist_test=Fal
     logger.info('Average predicted number of objects(%d samples): %.3f'
                 % (len(det_annos), total_pred_objects / max(1, len(det_annos))))
 
-    with open(result_dir / 'result.pkl', 'wb') as f:
-        pickle.dump(det_annos, f)
+    if result_dir is not None:
+        with open(result_dir / 'result.pkl', 'wb') as f:
+            pickle.dump(det_annos, f)
 
     result_str, result_dict = dataset.evaluation(
         det_annos, class_names,
@@ -131,7 +137,7 @@ def eval_one_epoch(cfg, args, model, dataloader, epoch_id, logger, dist_test=Fal
     logger.info(result_str)
     ret_dict.update(result_dict)
 
-    logger.info('Result is saved to %s' % result_dir)
+    logger.info('Result is save to %s' % result_dir)
     logger.info('****************Evaluation done.*****************')
     return ret_dict
 

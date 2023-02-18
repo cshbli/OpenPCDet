@@ -1,3 +1,5 @@
+import logging
+
 from collections import defaultdict
 from pathlib import Path
 
@@ -11,7 +13,7 @@ from .processor.point_feature_encoder import PointFeatureEncoder
 
 
 class DatasetTemplate(torch_data.Dataset):
-    def __init__(self, dataset_cfg=None, class_names=None, training=True, root_path=None, logger=None):
+    def __init__(self, dataset_cfg=None, class_names=None, training=True, root_path=None, logger=None, calib=False):
         super().__init__()
         self.dataset_cfg = dataset_cfg
         self.training = training
@@ -30,9 +32,11 @@ class DatasetTemplate(torch_data.Dataset):
         self.data_augmentor = DataAugmentor(
             self.root_path, self.dataset_cfg.DATA_AUGMENTOR, self.class_names, logger=self.logger
         ) if self.training else None
+        if calib:
+            self.data_augmentor = None
         self.data_processor = DataProcessor(
-            self.dataset_cfg.DATA_PROCESSOR, point_cloud_range=self.point_cloud_range,
-            training=self.training, num_point_features=self.point_feature_encoder.num_point_features
+            self.dataset_cfg.DATA_PROCESSOR, point_cloud_range=self.point_cloud_range, training=self.training,
+            num_point_features=self.point_feature_encoder.num_point_features
         )
 
         self.grid_size = self.data_processor.grid_size
@@ -40,71 +44,37 @@ class DatasetTemplate(torch_data.Dataset):
         self.total_epochs = 0
         self._merge_all_iters_to_one_epoch = False
 
-        if hasattr(self.data_processor, "depth_downsample_factor"):
-            self.depth_downsample_factor = self.data_processor.depth_downsample_factor
-        else:
-            self.depth_downsample_factor = None
-            
     @property
     def mode(self):
         return 'train' if self.training else 'test'
 
     def __getstate__(self):
         d = dict(self.__dict__)
-        del d['logger']
+        #del d['logger']
+        d['logger'] = None
         return d
 
     def __setstate__(self, d):
+        d['logger'] = logging.getLogger(__name__)
         self.__dict__.update(d)
 
-    def generate_prediction_dicts(self, batch_dict, pred_dicts, class_names, output_path=None):
+    @staticmethod
+    def generate_prediction_dicts(batch_dict, pred_dicts, class_names, output_path=None):
         """
+        To support a custom dataset, implement this function to receive the predicted results from the model, and then
+        transform the unified normative coordinate to your required coordinate, and optionally save them to disk.
+
         Args:
-            batch_dict:
-                frame_id:
-            pred_dicts: list of pred_dicts
-                pred_boxes: (N, 7 or 9), Tensor
+            batch_dict: dict of original data from the dataloader
+            pred_dicts: dict of predicted results from the model
+                pred_boxes: (N, 7), Tensor
                 pred_scores: (N), Tensor
                 pred_labels: (N), Tensor
             class_names:
-            output_path:
-
+            output_path: if it is not None, save the results to this path
         Returns:
 
         """
-        
-        def get_template_prediction(num_samples):
-            box_dim = 9 if self.dataset_cfg.get('TRAIN_WITH_SPEED', False) else 7
-            ret_dict = {
-                'name': np.zeros(num_samples), 'score': np.zeros(num_samples),
-                'boxes_lidar': np.zeros([num_samples, box_dim]), 'pred_labels': np.zeros(num_samples)
-            }
-            return ret_dict
-
-        def generate_single_sample_dict(box_dict):
-            pred_scores = box_dict['pred_scores'].cpu().numpy()
-            pred_boxes = box_dict['pred_boxes'].cpu().numpy()
-            pred_labels = box_dict['pred_labels'].cpu().numpy()
-            pred_dict = get_template_prediction(pred_scores.shape[0])
-            if pred_scores.shape[0] == 0:
-                return pred_dict
-
-            pred_dict['name'] = np.array(class_names)[pred_labels - 1]
-            pred_dict['score'] = pred_scores
-            pred_dict['boxes_lidar'] = pred_boxes
-            pred_dict['pred_labels'] = pred_labels
-
-            return pred_dict
-
-        annos = []
-        for index, box_dict in enumerate(pred_dicts):
-            single_pred_dict = generate_single_sample_dict(box_dict)
-            single_pred_dict['frame_id'] = batch_dict['frame_id'][index]
-            if 'metadata' in batch_dict:
-                single_pred_dict['metadata'] = batch_dict['metadata'][index]
-            annos.append(single_pred_dict)
-
-        return annos
 
     def merge_all_iters_to_one_epoch(self, merge=True, epochs=None):
         if merge:
@@ -134,7 +104,7 @@ class DatasetTemplate(torch_data.Dataset):
         """
         Args:
             data_dict:
-                points: optional, (N, 3 + C_in)
+                points: (N, 3 + C_in)
                 gt_boxes: optional, (N, 7 + C) [x, y, z, dx, dy, dz, heading, ...]
                 gt_names: optional, (N), string
                 ...
@@ -154,17 +124,14 @@ class DatasetTemplate(torch_data.Dataset):
         if self.training:
             assert 'gt_boxes' in data_dict, 'gt_boxes should be provided for training'
             gt_boxes_mask = np.array([n in self.class_names for n in data_dict['gt_names']], dtype=np.bool_)
-            
-            if 'calib' in data_dict:
-                calib = data_dict['calib']
-            data_dict = self.data_augmentor.forward(
-                data_dict={
-                    **data_dict,
-                    'gt_boxes_mask': gt_boxes_mask
-                }
-            )
-            if 'calib' in data_dict:
-                data_dict['calib'] = calib
+            if self.data_augmentor is not None:
+                data_dict = self.data_augmentor.forward(
+                    data_dict={
+                        **data_dict,
+                        'gt_boxes_mask': gt_boxes_mask
+                    }
+                )
+
         if data_dict.get('gt_boxes', None) is not None:
             selected = common_utils.keep_arrays_by_name(data_dict['gt_names'], self.class_names)
             data_dict['gt_boxes'] = data_dict['gt_boxes'][selected]
@@ -173,11 +140,7 @@ class DatasetTemplate(torch_data.Dataset):
             gt_boxes = np.concatenate((data_dict['gt_boxes'], gt_classes.reshape(-1, 1).astype(np.float32)), axis=1)
             data_dict['gt_boxes'] = gt_boxes
 
-            if data_dict.get('gt_boxes2d', None) is not None:
-                data_dict['gt_boxes2d'] = data_dict['gt_boxes2d'][selected]
-
-        if data_dict.get('points', None) is not None:
-            data_dict = self.point_feature_encoder.forward(data_dict)
+        data_dict = self.point_feature_encoder.forward(data_dict)
 
         data_dict = self.data_processor.forward(
             data_dict=data_dict
@@ -188,6 +151,8 @@ class DatasetTemplate(torch_data.Dataset):
             return self.__getitem__(new_index)
 
         data_dict.pop('gt_names', None)
+        # c_map = {"Car": 0, "Pedestrian": 1, "Cyclist": 2}
+        # data_dict['gt_names'] = [c_map[x] for x in data_dict['gt_names']]
 
         return data_dict
 
@@ -216,71 +181,12 @@ class DatasetTemplate(torch_data.Dataset):
                     for k in range(batch_size):
                         batch_gt_boxes3d[k, :val[k].__len__(), :] = val[k]
                     ret[key] = batch_gt_boxes3d
-
-                elif key in ['roi_boxes']:
-                    max_gt = max([x.shape[1] for x in val])
-                    batch_gt_boxes3d = np.zeros((batch_size, val[0].shape[0], max_gt, val[0].shape[-1]), dtype=np.float32)
+                elif key in ['gt_names']:
+                    max_gt = max([len(x) for x in val])
+                    batch_gt_names3d = np.zeros((batch_size, max_gt), dtype=np.float32)
                     for k in range(batch_size):
-                        batch_gt_boxes3d[k,:, :val[k].shape[1], :] = val[k]
-                    ret[key] = batch_gt_boxes3d
-
-                elif key in ['roi_scores', 'roi_labels']:
-                    max_gt = max([x.shape[1] for x in val])
-                    batch_gt_boxes3d = np.zeros((batch_size, val[0].shape[0], max_gt), dtype=np.float32)
-                    for k in range(batch_size):
-                        batch_gt_boxes3d[k,:, :val[k].shape[1]] = val[k]
-                    ret[key] = batch_gt_boxes3d
-
-                elif key in ['gt_boxes2d']:
-                    max_boxes = 0
-                    max_boxes = max([len(x) for x in val])
-                    batch_boxes2d = np.zeros((batch_size, max_boxes, val[0].shape[-1]), dtype=np.float32)
-                    for k in range(batch_size):
-                        if val[k].size > 0:
-                            batch_boxes2d[k, :val[k].__len__(), :] = val[k]
-                    ret[key] = batch_boxes2d
-                elif key in ["images", "depth_maps"]:
-                    # Get largest image size (H, W)
-                    max_h = 0
-                    max_w = 0
-                    for image in val:
-                        max_h = max(max_h, image.shape[0])
-                        max_w = max(max_w, image.shape[1])
-
-                    # Change size of images
-                    images = []
-                    for image in val:
-                        pad_h = common_utils.get_pad_params(desired_size=max_h, cur_size=image.shape[0])
-                        pad_w = common_utils.get_pad_params(desired_size=max_w, cur_size=image.shape[1])
-                        pad_width = (pad_h, pad_w)
-                        pad_value = 0
-
-                        if key == "images":
-                            pad_width = (pad_h, pad_w, (0, 0))
-                        elif key == "depth_maps":
-                            pad_width = (pad_h, pad_w)
-
-                        image_pad = np.pad(image,
-                                           pad_width=pad_width,
-                                           mode='constant',
-                                           constant_values=pad_value)
-
-                        images.append(image_pad)
-                    ret[key] = np.stack(images, axis=0)
-                elif key in ['calib']:
-                    ret[key] = val
-                elif key in ["points_2d"]:
-                    max_len = max([len(_val) for _val in val])
-                    pad_value = 0
-                    points = []
-                    for _points in val:
-                        pad_width = ((0, max_len-len(_points)), (0,0))
-                        points_pad = np.pad(_points,
-                                pad_width=pad_width,
-                                mode='constant',
-                                constant_values=pad_value)
-                        points.append(points_pad)
-                    ret[key] = np.stack(points, axis=0)
+                        batch_gt_names3d[k, :val[k].__len__()] = val[k]
+                    ret[key] = batch_gt_names3d
                 else:
                     ret[key] = np.stack(val, axis=0)
             except:

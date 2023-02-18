@@ -1,5 +1,4 @@
 import torch
-from functools import partial
 from torch.utils.data import DataLoader
 from torch.utils.data import DistributedSampler as _DistributedSampler
 
@@ -9,20 +8,18 @@ from .dataset import DatasetTemplate
 from .kitti.kitti_dataset import KittiDataset
 from .nuscenes.nuscenes_dataset import NuScenesDataset
 from .waymo.waymo_dataset import WaymoDataset
-from .pandaset.pandaset_dataset import PandasetDataset
-from .lyft.lyft_dataset import LyftDataset
-from .once.once_dataset import ONCEDataset
-from .custom.custom_dataset import CustomDataset
+from .hesai.hesai_dataset import HesaiDataset
+from .robosense.robosense_dataset import RoboSenseDataset
+from .leishen.leishen_dataset import LeishenDataset
 
 __all__ = {
     'DatasetTemplate': DatasetTemplate,
     'KittiDataset': KittiDataset,
     'NuScenesDataset': NuScenesDataset,
     'WaymoDataset': WaymoDataset,
-    'PandasetDataset': PandasetDataset,
-    'LyftDataset': LyftDataset,
-    'ONCEDataset': ONCEDataset,
-    'CustomDataset': CustomDataset
+    "HesaiDataset": HesaiDataset,
+    "RoboSenseDataset": RoboSenseDataset,
+    "LeishenDataset": LeishenDataset,
 }
 
 
@@ -49,8 +46,8 @@ class DistributedSampler(_DistributedSampler):
         return iter(indices)
 
 
-def build_dataloader(dataset_cfg, class_names, batch_size, dist, root_path=None, workers=4, seed=None,
-                     logger=None, training=True, merge_all_iters_to_one_epoch=False, total_epochs=0):
+def build_dataloader(dataset_cfg, class_names, batch_size, dist, root_path=None, workers=4,
+                     logger=None, training=True, merge_all_iters_to_one_epoch=False, total_epochs=0, calib=False):
 
     dataset = __all__[dataset_cfg.DATASET](
         dataset_cfg=dataset_cfg,
@@ -58,6 +55,7 @@ def build_dataloader(dataset_cfg, class_names, batch_size, dist, root_path=None,
         root_path=root_path,
         training=training,
         logger=logger,
+        calib=calib,
     )
 
     if merge_all_iters_to_one_epoch:
@@ -72,10 +70,12 @@ def build_dataloader(dataset_cfg, class_names, batch_size, dist, root_path=None,
             sampler = DistributedSampler(dataset, world_size, rank, shuffle=False)
     else:
         sampler = None
+    if calib:
+        training=False
     dataloader = DataLoader(
         dataset, batch_size=batch_size, pin_memory=True, num_workers=workers,
         shuffle=(sampler is None) and training, collate_fn=dataset.collate_batch,
-        drop_last=False, sampler=sampler, timeout=0, worker_init_fn=partial(common_utils.worker_init_fn, seed=seed)
+        drop_last=False, sampler=sampler, timeout=0
     )
 
     return dataset, dataloader, sampler

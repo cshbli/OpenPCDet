@@ -119,12 +119,9 @@ MODEL:
             TEST:
                 NMS_TYPE: nms_gpu
                 MULTI_CLASSES_NMS: False
-#                NMS_PRE_MAXSIZE: 1024
-#                NMS_POST_MAXSIZE: 100
-#                NMS_THRESH: 0.7
-                NMS_PRE_MAXSIZE: 4096
-                NMS_POST_MAXSIZE: 300
-                NMS_THRESH: 0.85
+                NMS_PRE_MAXSIZE: 1024
+                NMS_POST_MAXSIZE: 100
+                NMS_THRESH: 0.7
 
         ROI_AWARE_POOL:
             POOL_SIZE: 10
@@ -167,13 +164,13 @@ MODEL:
         NMS_CONFIG:
             MULTI_CLASSES_NMS: False
             NMS_TYPE: nms_gpu
-            NMS_THRESH: 0.7
+            NMS_THRESH: 0.1
             NMS_PRE_MAXSIZE: 4096
             NMS_POST_MAXSIZE: 500
 
 
 OPTIMIZATION:
-    BATCH_SIZE_PER_GPU: 2
+    BATCH_SIZE_PER_GPU: 3
     NUM_EPOCHS: 30
 
     OPTIMIZER: adam_onecycle

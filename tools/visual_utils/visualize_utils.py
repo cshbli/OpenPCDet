@@ -139,7 +139,8 @@ def draw_multi_grid_range(fig, grid_size=20, bv_range=(-60, -60, 60, 60)):
     return fig
 
 
-def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_scores=None, ref_labels=None):
+def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_scores=None, ref_labels=None, gt_labels=None,
+                plane_coeff=None, scores=None, score_threshold=0.0):
     if not isinstance(points, np.ndarray):
         points = points.cpu().numpy()
     if ref_boxes is not None and not isinstance(ref_boxes, np.ndarray):
@@ -153,11 +154,18 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_scores=None, ref_labe
 
     fig = visualize_pts(points)
     fig = draw_multi_grid_range(fig, bv_range=(0, -40, 80, 40))
+
     if gt_boxes is not None:
         corners3d = boxes_to_corners_3d(gt_boxes)
-        fig = draw_corners3d(corners3d, fig=fig, color=(0, 0, 1), max_num=100)
+        if gt_labels is None:
+            fig = draw_corners3d(corners3d, fig=fig, color=(1, 0, 0), max_num=100, scores=scores, score_threshold=score_threshold)
+        else:
+            fig = draw_corners3d(corners3d, fig=fig, color=(1, 0, 0), max_num=100, cls=gt_labels, scores=scores, score_threshold=score_threshold)
 
-    if ref_boxes is not None and len(ref_boxes) > 0:
+    if plane_coeff is not None:
+        raise NotImplementedError
+
+    if ref_boxes is not None:
         ref_corners3d = boxes_to_corners_3d(ref_boxes)
         if ref_labels is None:
             fig = draw_corners3d(ref_corners3d, fig=fig, color=(0, 1, 0), cls=ref_scores, max_num=100)
@@ -170,7 +178,8 @@ def draw_scenes(points, gt_boxes=None, ref_boxes=None, ref_scores=None, ref_labe
     return fig
 
 
-def draw_corners3d(corners3d, fig, color=(1, 1, 1), line_width=2, cls=None, tag='', max_num=500, tube_radius=None):
+def draw_corners3d(corners3d, fig, color=(1, 1, 1), line_width=2, cls=None, tag='', max_num=500, tube_radius=None,
+                   scores=None, score_threshold=0.5):
     """
     :param corners3d: (N, 8, 3)
     :param fig:
@@ -184,13 +193,15 @@ def draw_corners3d(corners3d, fig, color=(1, 1, 1), line_width=2, cls=None, tag=
     import mayavi.mlab as mlab
     num = min(max_num, len(corners3d))
     for n in range(num):
+        if scores is not None and scores[n] <= score_threshold:
+            continue
         b = corners3d[n]  # (8, 3)
 
         if cls is not None:
             if isinstance(cls, np.ndarray):
-                mlab.text3d(b[6, 0], b[6, 1], b[6, 2], '%.2f' % cls[n], scale=(0.3, 0.3, 0.3), color=color, figure=fig)
+                mlab.text3d(b[6, 0], b[6, 1], b[6, 2], '%s - %s' % (cls[n][:3], round(scores[n], 2)), scale=(1, 1, 1), color=color, figure=fig)
             else:
-                mlab.text3d(b[6, 0], b[6, 1], b[6, 2], '%s' % cls[n], scale=(0.3, 0.3, 0.3), color=color, figure=fig)
+                mlab.text3d(b[6, 0], b[6, 1], b[6, 2], '%s - %s' % (cls[n][:3], round(scores[n], 2)), scale=(1, 1, 1), color=color, figure=fig)
 
         for k in range(0, 4):
             i, j = k, (k + 1) % 4

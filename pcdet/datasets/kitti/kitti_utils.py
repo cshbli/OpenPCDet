@@ -12,11 +12,6 @@ def transform_annotations_to_kitti_format(annos, map_name_to_kitti=None, info_wi
 
     """
     for anno in annos:
-        # For lyft and nuscenes, different anno key in info
-        if 'name' not in anno:
-            anno['name'] = anno['gt_names']
-            anno.pop('gt_names')
-
         for k in range(anno['name'].shape[0]):
             anno['name'][k] = map_name_to_kitti[anno['name'][k]]
 
@@ -40,6 +35,7 @@ def transform_annotations_to_kitti_format(annos, map_name_to_kitti=None, info_wi
             anno['location'][:, 2] = gt_boxes_lidar[:, 0]  # z = x_lidar
             dxdydz = gt_boxes_lidar[:, 3:6]
             anno['dimensions'] = dxdydz[:, [0, 2, 1]]  # lwh ==> lhw
+            # anno['dimensions'] = dxdydz[:, [1, 2, 0]]  # lwh ==> lhw
             anno['rotation_y'] = -gt_boxes_lidar[:, 6] - np.pi / 2.0
             anno['alpha'] = -np.arctan2(-gt_boxes_lidar[:, 1], gt_boxes_lidar[:, 0]) + anno['rotation_y']
         else:
@@ -47,20 +43,3 @@ def transform_annotations_to_kitti_format(annos, map_name_to_kitti=None, info_wi
             anno['rotation_y'] = anno['alpha'] = np.zeros(0)
 
     return annos
-
-
-def calib_to_matricies(calib):
-    """
-    Converts calibration object to transformation matricies
-    Args:
-        calib: calibration.Calibration, Calibration object
-    Returns
-        V2R: (4, 4), Lidar to rectified camera transformation matrix
-        P2: (3, 4), Camera projection matrix
-    """
-    V2C = np.vstack((calib.V2C, np.array([0, 0, 0, 1], dtype=np.float32)))  # (4, 4)
-    R0 = np.hstack((calib.R0, np.zeros((3, 1), dtype=np.float32)))  # (3, 4)
-    R0 = np.vstack((R0, np.array([0, 0, 0, 1], dtype=np.float32)))  # (4, 4)
-    V2R = R0 @ V2C
-    P2 = calib.P2
-    return V2R, P2

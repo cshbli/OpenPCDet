@@ -26,7 +26,9 @@ class Calibration(object):
             calib = get_calib_from_file(calib_file)
         else:
             calib = calib_file
-
+        # The Px matrices project a point in the rectified referenced camera coordinate to the camera_x image
+        # R0_rect is the rectifying rotation for reference coordinate
+        # Tr_velo_to_cam maps a point in point cloud coordinate to reference co-ordinate.
         self.P2 = calib['P2']  # 3 x 4
         self.R0 = calib['R0']  # 3 x 3
         self.V2C = calib['Tr_velo2cam']  # 3 x 4
