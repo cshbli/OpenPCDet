@@ -66,6 +66,44 @@ Non_motor_vehicles:51.7760
 Pedestrians:0.0000
 ```
 
+### Train one epoch
+
+```
+python train_qat_xinrui.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml \
+--ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth \
+--pretrained_model ../checkpoints/leishen/qat/checkpoint_epoch_25.pth \
+--cwd /home/hongbing/Projects/OpenPCDet/tools \
+--batch_size 4 --output_dir ../output_minmax --epochs 1
+```
+output: 
+
+```
+Car:50.4889
+Truck:40.8658
+Bus:0.4545
+Non_motor_vehicles:14.6391
+Pedestrians:0.0000
+```
+
+### Train one epoch without activation quantization
+
+```
+python train_qat_xinrui.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml \
+--ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth \
+--pretrained_model ../checkpoints/leishen/qat/checkpoint_epoch_25.pth \
+--cwd /home/hongbing/Projects/OpenPCDet/tools \
+--batch_size 4 --output_dir ../output_minmax --epochs 1
+```
+output: 
+
+```
+Car:68.3408
+Truck:34.3958
+Bus:9.0909
+Non_motor_vehicles:22.5743
+Pedestrians:0.0000
+```
+
 ## Float model Structure
 
 ```

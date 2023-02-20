@@ -1,0 +1,11 @@
+digraph {
+	graph [size="12,12"]
+	node [align=left fontname=monospace fontsize=10 height=0.2 ranksep=0.1 shape=box style=filled]
+	"PillarVFE-140547911976992"
+	"PointPillarScatter-140547911976896"
+	"Conv2d-140547925768752"
+	"PillarVFE-140547911976992" -> "PointPillarScatter-140547911976896"
+	"PillarVFE-140547911976992" -> "Conv2d-140547925768752"
+	"PointPillarScatter-140547911976896" -> "PillarVFE-140547911976992"
+	"PointPillarScatter-140547911976896" -> "Conv2d-140547925768752"
+}

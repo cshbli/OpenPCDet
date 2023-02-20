@@ -39,7 +39,7 @@ def get_arguments():
     parser.add_argument('--config', type=str, help='config file', default='/barn5/xinruizhang/code/OpenPCDet_robosense/tools/cfgs/robosense_models/pp_robosense_baseline_qat_0.yaml')
     parser.add_argument('--ckpt', type=str, help='ckpt', default='/barn3/xinruizhang/code/OpenPCDet/output/robosense_models/pp_robosense_baseline/robosense_baseline_08272021/ckpt/checkpoint_epoch_80.pth')
     parser.add_argument('--batch_size', type=int, help='batch_size', default=12)
-    parser.add_argument('--epochs', type=int, help='epochs', default=None)
+    parser.add_argument('--epochs', type=int, help='epochs', default=1)
     parser.add_argument('--output_dir', type=str, help='output_dir', default='pytorch/pointpillar')
     parser.add_argument('--cwd', type=str, help='cwd', default='/barn5/xinruizhang/code/OpenPCDet_robosense/tools')
     parser.add_argument('--pretrained_model', type=str, default=None, help='pretrained_model')
@@ -91,7 +91,7 @@ def main():
 
     # Train model
     display_step = 100
-    epochs = 5
+    epochs = args.epochs
 
     # model, optimizer, lr_scheduler, start_epoch, start_iter = ckpt['model'], ckpt['optimizer'], ckpt['lr_scheduler'], ckpt['start_epoch'], ckpt['start_iter']
     start_iter = 0
@@ -100,7 +100,7 @@ def main():
     # resume training 
     if args.pretrained_model is not None:
         model = prepared_model
-        model.load_state_dict(torch.load(args.pretrained_model))
+        model.load_state_dict(torch.load(args.pretrained_model), strict=False)
     
         ckpt_list = glob.glob(os.path.join(ckpt_save_dir, '*.pth'))
         curr_ckpt = os.path.abspath(args.pretrained_model)
@@ -187,7 +187,7 @@ def main():
         if cur_epoch == start_epoch:
             print("Aligning bst hardware...")
             model.apply(torch.quantization.disable_observer)
-            quantizer.align_bst_hardware(model, sample_data, debug_mode=True)
+            # quantizer.align_bst_hardware(model, sample_data, debug_mode=True)
             model.apply(torch.nn.intrinsic.qat.freeze_bn_stats)
 
     print("Training is Done")
@@ -244,7 +244,7 @@ def main():
     rand_in = np.random.rand(1, 1, 128, 600, 560).astype("float32")
     print("Exporting onnx...")
     sample_in = tuple(torch.from_numpy(x) for x in rand_in)
-    onnx_model_path, quant_param_json_path = quantizer.export_onnx(prepared_model, sample_in, result_dir=output_dir)
+    onnx_model_path, quant_param_json_path = quantizer.export_onnx(prepared_model, sample_in, result_dir=output_dir, debug_mode=True)
     prepared_model.to(device)
     prepared_model.train()
     print("Done")
@@ -266,38 +266,28 @@ def quantize_model(model, device, backend='default', sample_data=None):
         # prepare qat model using qconfig settings
         prepared_model = quantizer_torch.prepare_qat(model, inplace=False)
     elif backend == 'bst':
-        # bst_activation_quant = quantizer.fake_quantize.FakeQuantize.with_args(
-        #     observer=quantizer.observer.MinMaxObserver.with_args(dtype=torch.qint8),
-        #     # observer=quantizer.observer.MinMaxObserver.with_args(dtype=torch.qint8,quantile=0.95),
-        #     quant_min=-128, quant_max=127, dtype=torch.qint8, qscheme=torch.per_tensor_affine, reduce_range=False)
-        #     # observer=quantizer.observer.PerChannelMinMaxObserver.with_args(dtype=torch.qint8),
-        #     # observer=quantizer.observer.MovingAveragePerChannelMinMaxObserver.with_args(dtype=torch.qint8),
-        #     # quant_min=-128, quant_max=127, dtype=torch.qint8, qscheme=torch.per_channel_affine, reduce_range=False)
         bst_activation_quant = quantizer.fake_quantize.FakeQuantize.with_args(
             observer=quantizer.observer.MovingAverageMinMaxObserver.with_args(dtype=torch.qint8), 
             quant_min=-128, quant_max=127, dtype=torch.qint8, qscheme=torch.per_tensor_affine, reduce_range=False)
-        # bst_weight_quant = quantizer.fake_quantize.FakeQuantize.with_args(
-        #     observer=quantizer.observer.MinMaxObserver.with_args(dtype=torch.qint8),
-        #     # observer=quantizer.observer.MinMaxObserver.with_args(dtype=torch.qint8,quantile=0.95),
-        #     quant_min=-128, quant_max=127, dtype=torch.qint8, qscheme=torch.per_tensor_affine, reduce_range=False)
-            # observer=quantizer.observer.PerChannelMinMaxObserver.with_args(dtype=torch.qint8),
-            # observer=quantizer.observer.MovingAveragePerChannelMinMaxObserver.with_args(dtype=torch.qint8),
-            # quant_min=-128, quant_max=127, dtype=torch.qint8, qscheme=torch.per_channel_affine, reduce_range=False)
         bst_weight_quant = quantizer.fake_quantize.FakeQuantize.with_args(
-            observer=quantizer.observer.MovingAveragePerChannelMinMaxObserver.with_args(dtype=torch.qint8), 
-            quant_min=-128, quant_max=127, dtype=torch.qint8, qscheme=torch.per_channel_affine, reduce_range=False)            
-        # 1) [bst_alignment] get b0 pre-bind qconfig adjusting Conv's activation quant scheme
-        # b0_pre_bind_qconfig = quantizer.pre_bind(model, input_tensor=sample_data.to('cpu'), debug_mode=True, observer_scheme_dict={"weight_scheme": "MinMaxObserver", "activation_scheme": "MinMaxObserver"})
-        # b0_pre_bind_qconfig = quantizer.pre_bind(model, input_tensor=sample_data.to('cpu'), debug_mode=True, observer_scheme_dict={"weight_scheme": "PerChannelMinMaxObserver", "activation_scheme": "PerChannelMinMaxObserver"})
-        # b0_pre_bind_qconfig = quantizer.pre_bind(model, input_tensor=sample_data.to('cpu'), debug_mode=True, observer_scheme_dict={"weight_scheme": "MinMaxObserver", "activation_scheme": "MinMaxObserver"})
-        b0_pre_bind_qconfig = quantizer.pre_bind(model, input_tensor=sample_data.to('cpu'), debug_mode=True, observer_scheme_dict={"weight_scheme": "MovingAveragePerChannelMinMaxObserver", "activation_scheme": "MovingAverageMinMaxObserver"})
+            observer=quantizer.observer.MovingAverageMinMaxObserver.with_args(dtype=torch.qint8), 
+            quant_min=-128, quant_max=127, dtype=torch.qint8, qscheme=torch.per_tensor_affine, reduce_range=False)
+
+        # # 1) [bst_alignment] get b0 pre-bind qconfig adjusting Conv's activation quant scheme        
+        # b0_pre_bind_qconfig = quantizer.pre_bind(model, input_tensor=sample_data.to('cpu'), debug_mode=True, observer_scheme_dict={"weight_scheme": "MovingAverageMinMaxObserver", "activation_scheme": "MovingAverageMinMaxObserver"})
+
         # 2) assign qconfig to model
-        model.qconfig = quantizer.QConfig(activation=bst_activation_quant, weight=bst_weight_quant,
-                                                    qconfig_dict=b0_pre_bind_qconfig)
+        # model.qconfig = quantizer.QConfig(activation=bst_activation_quant, weight=bst_weight_quant,        
+        #                                             qconfig_dict=b0_pre_bind_qconfig)
+
+        # model.qconfig = quantizer.QConfig(activation=bst_activation_quant, weight=bst_weight_quant)
+        model.qconfig = quantizer.QConfig(activation=nn.Identity, weight=bst_weight_quant)                                                    
+
         # 3) prepare qat model using qconfig settings
         prepared_model = quantizer.prepare_qat(model, inplace=False)
+
         # 4) [bst_alignment] link model observers
-        prepared_model = quantizer.link_modules(prepared_model, auto_detect=True, input_tensor=sample_data.to('cpu'), inplace=False, debug_mode=True)
+        # prepared_model = quantizer.link_modules(prepared_model, auto_detect=True, input_tensor=sample_data.to('cpu'), inplace=False, debug_mode=True)
 
     prepared_model.eval()
     return prepared_model
