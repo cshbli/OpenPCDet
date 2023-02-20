@@ -166,7 +166,7 @@ class Detector3DTemplate(nn.Module):
         model_info_dict['module_list'].append(point_head_module)
         return point_head_module, model_info_dict
 
-    def forward(self, *args, **kwargs):
+    def forward(self, **kwargs):
         raise NotImplementedError
 
     def post_processing(self, batch_dict):

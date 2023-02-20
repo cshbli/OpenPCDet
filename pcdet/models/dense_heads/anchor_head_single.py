@@ -7,7 +7,7 @@ from .anchor_head_template import AnchorHeadTemplate
 
 class AnchorHeadSingle(AnchorHeadTemplate):
     def __init__(self, model_cfg, input_channels, num_class, class_names, grid_size, point_cloud_range,
-                 predict_boxes_when_training=True, quantize=True):
+                 predict_boxes_when_training=True, **kwargs):
         super().__init__(
             model_cfg=model_cfg, num_class=num_class, class_names=class_names, grid_size=grid_size, point_cloud_range=point_cloud_range,
             predict_boxes_when_training=predict_boxes_when_training
@@ -33,43 +33,46 @@ class AnchorHeadSingle(AnchorHeadTemplate):
         else:
             self.conv_dir_cls = None
         self.init_weights()
-        self.quantize = quantize
-        if quantize:
-            self.dequant0 = torch.quantization.DeQuantStub()
-            self.dequant1 = torch.quantization.DeQuantStub()
-            self.dequant2 = torch.quantization.DeQuantStub()
 
     def init_weights(self):
         pi = 0.01
         nn.init.constant_(self.conv_cls.bias, -np.log((1 - pi) / pi))
         nn.init.normal_(self.conv_box.weight, mean=0, std=0.001)
 
-    def preprocess(self, data_dict):
-        return data_dict
+    def forward(self, data_dict):
+        heads_out = data_dict['spatial_features_2d']
+        if self.model_cfg.USE_HEADS is True:
+            cls_preds = self.conv_cls(spatial_features_2d)
+            box_preds = self.conv_box(spatial_features_2d)
 
-    def postprocess(self, data_dict):
-        cls_preds = data_dict.pop('cls_preds')
-        box_preds = data_dict.pop('box_preds')
-    # def forward(self, data_dict):
-    #     spatial_features_2d = data_dict['spatial_features_2d']
+            cls_preds = cls_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C]
+            box_preds = box_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C]
 
-    #     cls_preds = self.conv_cls(spatial_features_2d)
-    #     box_preds = self.conv_box(spatial_features_2d)
+            self.forward_ret_dict['cls_preds'] = cls_preds
+            self.forward_ret_dict['box_preds'] = box_preds
 
-        cls_preds = cls_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C]
-        box_preds = box_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C]
-
-        self.forward_ret_dict['cls_preds'] = cls_preds
-        self.forward_ret_dict['box_preds'] = box_preds
-
-        # if self.conv_dir_cls is not None:
-        #     dir_cls_preds = self.conv_dir_cls(spatial_features_2d)
-        dir_cls_preds = data_dict.pop('dir_cls_preds')
-        if dir_cls_preds is not None:
-            dir_cls_preds = dir_cls_preds.permute(0, 2, 3, 1).contiguous()
+            if self.conv_dir_cls is not None:
+                dir_cls_preds = self.conv_dir_cls(spatial_features_2d)
+                dir_cls_preds = dir_cls_preds.permute(0, 2, 3, 1).contiguous()
+                self.forward_ret_dict['dir_cls_preds'] = dir_cls_preds
+            else:
+                dir_cls_preds = None
+        else:
+            heads_out = heads_out.permute(0, 2, 3, 1).contiguous()
+            heads_out = heads_out.cpu().detach().numpy()
+            num_channel_cls = self.num_anchors_per_location * self.num_class
+            num_channel_box = self.num_anchors_per_location * self.box_coder.code_size
+            num_channel_dir_cls = self.num_anchors_per_location * self.model_cfg.NUM_DIR_BINS
+            num_channel_total = num_channel_cls + num_channel_box + num_channel_dir_cls
+            cls_preds = heads_out[:, :, :, : num_channel_cls]
+            box_preds = heads_out[:, :, :, num_channel_cls : num_channel_cls + num_channel_box]
+            dir_cls_preds = heads_out[:, :, :, num_channel_cls + num_channel_box : num_channel_total]
+            cls_preds = torch.from_numpy(cls_preds).to('cuda:0')
+            box_preds = torch.from_numpy(box_preds).to('cuda:0')
+            dir_cls_preds = torch.from_numpy(dir_cls_preds).to('cuda:0')
+            self.forward_ret_dict['cls_preds'] = cls_preds
+            self.forward_ret_dict['box_preds'] = box_preds
             self.forward_ret_dict['dir_cls_preds'] = dir_cls_preds
-        # else:
-        #     dir_cls_preds = None
 
         if self.training:
             targets_dict = self.assign_targets(
@@ -88,17 +91,3 @@ class AnchorHeadSingle(AnchorHeadTemplate):
 
         return data_dict
 
-    def forward(self, spatial_features_2d):
-        cls_preds = self.conv_cls(spatial_features_2d)
-        box_preds = self.conv_box(spatial_features_2d)
-        if self.conv_dir_cls is not None:
-            dir_cls_preds = self.conv_dir_cls(spatial_features_2d)
-        else:
-            dir_cls_preds = None
-
-        if self.quantize:
-            cls_preds = self.dequant0(cls_preds)
-            box_preds = self.dequant1(box_preds)
-            dir_cls_preds = self.dequant2(dir_cls_preds)
-
-        return cls_preds, box_preds, dir_cls_preds

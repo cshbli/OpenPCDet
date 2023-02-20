@@ -27,12 +27,7 @@ def model_fn_decorator():
 
     def model_func(model, batch_dict):
         load_data_to_gpu(batch_dict)
-        #ret_dict, tb_dict, disp_dict = model(batch_dict)
-        batch_dict = model.preprocess(batch_dict)
-        (
-        batch_dict['cls_preds'], batch_dict['box_preds'], batch_dict['dir_cls_preds']
-        ) = model(batch_dict['spatial_features'])
-        ret_dict, tb_dict, disp_dict = model.postprocess(batch_dict)
+        ret_dict, tb_dict, disp_dict = model(batch_dict)
 
         loss = ret_dict['loss'].mean()
         if hasattr(model, 'update_global_step'):

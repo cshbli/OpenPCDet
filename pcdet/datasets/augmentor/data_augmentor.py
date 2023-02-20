@@ -1,5 +1,3 @@
-import logging
-
 from functools import partial
 
 import numpy as np
@@ -36,12 +34,10 @@ class DataAugmentor(object):
 
     def __getstate__(self):
         d = dict(self.__dict__)
-        # del d['logger']
-        d['logger'] = None
+        del d['logger']
         return d
 
     def __setstate__(self, d):
-        d['logger'] = logging.getLogger(__name__)
         self.__dict__.update(d)
    
     def random_world_flip(self, data_dict=None, config=None):
@@ -77,6 +73,16 @@ class DataAugmentor(object):
             return partial(self.random_world_scaling, config=config)
         gt_boxes, points = augmentor_utils.global_scaling(
             data_dict['gt_boxes'], data_dict['points'], config['WORLD_SCALE_RANGE']
+        )
+        data_dict['gt_boxes'] = gt_boxes
+        data_dict['points'] = points
+        return data_dict
+
+    def random_world_translation(self, data_dict=None, config=None):
+        if data_dict is None:
+            return partial(self.random_world_translation, config=config)
+        gt_boxes, points = augmentor_utils.global_translation(
+            data_dict['gt_boxes'], data_dict['points'], config['WORLD_TRANSLATION_DISTANCE']
         )
         data_dict['gt_boxes'] = gt_boxes
         data_dict['points'] = points

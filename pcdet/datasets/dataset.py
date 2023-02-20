@@ -1,5 +1,3 @@
-import logging
-
 from collections import defaultdict
 from pathlib import Path
 
@@ -13,7 +11,7 @@ from .processor.point_feature_encoder import PointFeatureEncoder
 
 
 class DatasetTemplate(torch_data.Dataset):
-    def __init__(self, dataset_cfg=None, class_names=None, training=True, root_path=None, logger=None, calib=False):
+    def __init__(self, dataset_cfg=None, class_names=None, training=True, root_path=None, logger=None):
         super().__init__()
         self.dataset_cfg = dataset_cfg
         self.training = training
@@ -32,8 +30,6 @@ class DatasetTemplate(torch_data.Dataset):
         self.data_augmentor = DataAugmentor(
             self.root_path, self.dataset_cfg.DATA_AUGMENTOR, self.class_names, logger=self.logger
         ) if self.training else None
-        if calib:
-            self.data_augmentor = None
         self.data_processor = DataProcessor(
             self.dataset_cfg.DATA_PROCESSOR, point_cloud_range=self.point_cloud_range, training=self.training,
             num_point_features=self.point_feature_encoder.num_point_features
@@ -50,12 +46,10 @@ class DatasetTemplate(torch_data.Dataset):
 
     def __getstate__(self):
         d = dict(self.__dict__)
-        #del d['logger']
-        d['logger'] = None
+        del d['logger']
         return d
 
     def __setstate__(self, d):
-        d['logger'] = logging.getLogger(__name__)
         self.__dict__.update(d)
 
     @staticmethod
@@ -124,13 +118,12 @@ class DatasetTemplate(torch_data.Dataset):
         if self.training:
             assert 'gt_boxes' in data_dict, 'gt_boxes should be provided for training'
             gt_boxes_mask = np.array([n in self.class_names for n in data_dict['gt_names']], dtype=np.bool_)
-            if self.data_augmentor is not None:
-                data_dict = self.data_augmentor.forward(
-                    data_dict={
-                        **data_dict,
-                        'gt_boxes_mask': gt_boxes_mask
-                    }
-                )
+            data_dict = self.data_augmentor.forward(
+                data_dict={
+                    **data_dict,
+                    'gt_boxes_mask': gt_boxes_mask
+                }
+            )
 
         if data_dict.get('gt_boxes', None) is not None:
             selected = common_utils.keep_arrays_by_name(data_dict['gt_names'], self.class_names)

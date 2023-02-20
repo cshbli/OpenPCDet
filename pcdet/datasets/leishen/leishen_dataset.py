@@ -11,7 +11,7 @@ from ...utils import object3d_leishen, calibration_leishen, box_utils, common_ut
 
 # modified from robosense dataset
 class LeishenDataset(DatasetTemplate):
-    def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None, calib=False):
+    def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None):
         """
         Args:
             root_path:
@@ -21,7 +21,7 @@ class LeishenDataset(DatasetTemplate):
             logger:
         """
         super().__init__(
-            dataset_cfg=dataset_cfg, class_names=class_names, training=training, root_path=root_path, logger=logger,calib=calib
+            dataset_cfg=dataset_cfg, class_names=class_names, training=training, root_path=root_path, logger=logger
         )
         self.split = self.dataset_cfg.DATA_SPLIT[self.mode]
         self.root_split_path = self.root_path / ('training' if self.split != 'test' else 'testing')
@@ -95,6 +95,7 @@ class LeishenDataset(DatasetTemplate):
     def get_road_plane(self, idx):
         return None
 
+    # no test data from leishen
     def evaluation(self, det_annos, class_names, **kwargs):
         if 'annos' not in self.leishen_infos[0].keys():
             return None, {}
@@ -363,7 +364,8 @@ class LeishenDataset(DatasetTemplate):
                 rots = np.array([obj.ry for obj in obj_list]).reshape(num_gt, 1)
 
                 loc_lidar = np.concatenate([obj.loc.reshape(1, 3) for obj in obj_list], axis=0)
-                gt_boxes_lidar = np.concatenate([loc_lidar, w, l, h, rots], axis=1) # robosense:lwh; leishen:wlh
+                # gt_boxes_lidar = np.concatenate([loc_lidar, l, w, h, rots], axis=1)
+                gt_boxes_lidar = np.concatenate([loc_lidar, w, l, h, rots], axis=1)
                 annotations['gt_boxes_lidar'] = gt_boxes_lidar
                 gt_boxes_camera = box_utils.boxes3d_lidar_to_kitti_camera(gt_boxes_lidar, calib)
                 annotations['dimensions'] = gt_boxes_camera[:, 3:6]
@@ -437,7 +439,7 @@ class LeishenDataset(DatasetTemplate):
             h = np.array([obj.h for obj in obj_list]).reshape(num_gt, 1)
             w = np.array([obj.w for obj in obj_list]).reshape(num_gt, 1)
             rots = np.array([obj.ry for obj in obj_list]).reshape(num_gt, 1)
-            gt_boxes_lidar = np.concatenate([loc_lidar, w, l, h, rots], axis=1) # leishen: wlh; robosense: lwh
+            gt_boxes_lidar = np.concatenate([loc_lidar, l, w, h, rots], axis=1)
             annotations['gt_boxes_lidar'] = gt_boxes_lidar
             gt_boxes_camera = box_utils.boxes3d_lidar_to_kitti_camera(gt_boxes_lidar, calib)
             gt_boxes_img = box_utils.boxes3d_kitti_camera_to_imageboxes(

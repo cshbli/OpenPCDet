@@ -24,14 +24,11 @@ def statistics_info(cfg, ret_dict, metric, disp_dict):
 
 
 def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, save_to_file=False, result_dir=None):
-    if result_dir is not None:
-        result_dir.mkdir(parents=True, exist_ok=True)
+    result_dir.mkdir(parents=True, exist_ok=True)
 
-        final_output_dir = result_dir / 'final_result' / 'data'
-        if save_to_file:
-            final_output_dir.mkdir(parents=True, exist_ok=True)
-    else:
-        final_output_dir = None
+    final_output_dir = result_dir / 'final_result' / 'data'
+    if save_to_file:
+        final_output_dir.mkdir(parents=True, exist_ok=True)
 
     metric = {
         'gt_num': 0,
@@ -59,25 +56,28 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
         progress_bar = tqdm.tqdm(total=len(dataloader), leave=True, desc='eval', dynamic_ncols=True)
     start_time = time.time()
     for i, batch_dict in enumerate(dataloader):
+        # raise NotImplementedError
         load_data_to_gpu(batch_dict)
         with torch.no_grad():
-            batch_dict = model.preprocess(batch_dict)
-        with torch.no_grad():
-            (
-                batch_dict['cls_preds'], batch_dict['box_preds'], batch_dict['dir_cls_preds']
-            ) = model(batch_dict['spatial_features'])
-            pred_dicts, ret_dict = model.postprocess(batch_dict)
+            pred_dicts, ret_dict = model(batch_dict)
             # for i in range(len(pred_dicts)):
             #     pred_dicts[i]['frame_id'] = batch_dict['frame_id'][i]
             # pred_list.append(pred_dicts)
-            # pred_dicts, ret_dict = model(batch_dict)
         disp_dict = {}
 
         statistics_info(cfg, ret_dict, metric, disp_dict)
-        annos = dataset.generate_prediction_dicts(
-            batch_dict, pred_dicts, class_names,
-            output_path=final_output_dir if save_to_file else None
-        )
+
+        if cfg.DATA_CONFIG.get("CENTER_HEAD_CONFIG") and \
+                cfg.DATA_CONFIG.CENTER_HEAD_CONFIG.reformat_data_by_center:
+            annos = dataset.convert_center_net_detection_to_kitti_annos(
+                batch_dict, pred_dicts, class_names,
+                output_path=final_output_dir if save_to_file else None
+            )
+        else:
+            annos = dataset.generate_prediction_dicts(
+                batch_dict, pred_dicts, class_names,
+                output_path=final_output_dir if save_to_file else None
+            )
         det_annos += annos
         if cfg.LOCAL_RANK == 0:
             progress_bar.set_postfix(disp_dict)
@@ -124,9 +124,8 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
     logger.info('Average predicted number of objects(%d samples): %.3f'
                 % (len(det_annos), total_pred_objects / max(1, len(det_annos))))
 
-    if result_dir is not None:
-        with open(result_dir / 'result.pkl', 'wb') as f:
-            pickle.dump(det_annos, f)
+    with open(result_dir / 'result.pkl', 'wb') as f:
+        pickle.dump(det_annos, f)
 
     result_str, result_dict = dataset.evaluation(
         det_annos, class_names,
@@ -140,6 +139,24 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
     logger.info('Result is save to %s' % result_dir)
     logger.info('****************Evaluation done.*****************')
     return ret_dict
+
+def eval_from_file(cfg, pkl_path, dataloader, logger):
+    print("load pickle from {}".format(pkl_path))
+    with open(pkl_path, 'rb') as f:
+        det_annos = pickle.load(f)
+    dataset = dataloader.dataset
+    class_names = dataset.class_names
+
+    result_str, result_dict = dataset.evaluation(
+        det_annos, class_names,
+        eval_metric=cfg.MODEL.POST_PROCESSING.EVAL_METRIC,
+        output_path="./result"
+    )
+
+    logger.info(result_str)
+
+    logger.info('****************Evaluation done.*****************')
+    return
 
 
 if __name__ == '__main__':

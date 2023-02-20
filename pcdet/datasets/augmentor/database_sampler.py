@@ -1,4 +1,3 @@
-import logging
 import pickle
 
 import numpy as np
@@ -42,12 +41,10 @@ class DataBaseSampler(object):
 
     def __getstate__(self):
         d = dict(self.__dict__)
-        # del d['logger']
-        d['logger'] = None
+        del d['logger']
         return d
 
     def __setstate__(self, d):
-        d['logger'] = logging.getLogger(__name__)
         self.__dict__.update(d)
 
     def filter_by_difficulty(self, db_infos, removed_difficulty):
