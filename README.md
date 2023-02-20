@@ -155,6 +155,39 @@ Pedestrians:0.0000
 
 The exported onnx model has a big accuracy drop compared to PyTorch model.
 
+## QAT without activation quantization 
+
+```
+    BACKBONE_2D:
+        NAME: BaseBEVBackbone
+        LAYER_NUMS: [3, 5]
+        LAYER_STRIDES: [2, 2]
+        NUM_FILTERS: [64, 128]
+        UPSAMPLE_STRIDES: [1, 2]
+        NUM_UPSAMPLE_FILTERS: [128, 128]
+        USE_ONNX: True
+        # PATH: /barn4/jishengchen/for_hongbing/per_tensor_minmax_no_quantile/torch_frozen_model.onnx
+        # INPUT: X.1
+        PATH: /barn4/jishengchen/code/leishen_codebase/OpenPCDet/output/leishen_models/qat_no_activation_quant/debug_inferred_model.onnx
+        INPUT: input.1
+```
+
+```
+python test.py --cfg_file ../tools/cfgs/leishen_models/pp_robosense_baseline_onnx_per_tensor.yaml --batch_size 1 \
+--ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth
+```
+
+output: 
+
+```
+Car:68.3894
+Truck:34.9785
+Bus:9.0909
+Non_motor_vehicles:22.5661
+Pedestrians:0.0000
+```
+
+* The acurracy of the exported ONNX model is very close to the QAT PyTorch model.        
 ## Float model Structure
 
 ```
