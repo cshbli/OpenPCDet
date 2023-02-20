@@ -102,7 +102,8 @@ def main():
     model = ckpt['model']
 
     # use CPU on input_tensor as our backend for parsing GraphTopology forced model to be on CPU
-    random_data = np.random.rand(8, 128, 600, 560).astype("float32")
+    # random_data = np.random.rand(8, 128, 600, 560).astype("float32")
+    random_data = np.random.rand(1, 128, 600, 560).astype("float32")
     sample_data = torch.from_numpy(random_data).to(device)
     model.eval()
     fused_model = quantizer.fuse_modules(model, auto_detect=True, input_tensor=sample_data.cpu(), debug_mode=True)
@@ -172,7 +173,8 @@ def main():
     rand_in = np.random.rand(1, 1, 128, 600, 560).astype("float32")
     print("Exporting onnx...")
     sample_in = tuple(torch.from_numpy(x) for x in rand_in)
-    onnx_model_path, quant_param_json_path = quantizer.export_onnx(prepared_model, sample_in, result_dir=output_dir)
+    # onnx_model_path, quant_param_json_path = quantizer.export_onnx(prepared_model, sample_in, result_dir=output_dir)
+    onnx_model_path, quant_param_json_path = quantizer.export_onnx(prepared_model, sample_in, result_dir=output_dir, debug_mode=True)
     prepared_model.to(device)
     prepared_model.train()
     print("Done")

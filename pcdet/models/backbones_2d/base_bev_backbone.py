@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-# from bstnnx_training.PyTorch.QAT import modules as bstnn
+from bstnnx_training.PyTorch.QAT import modules as bstnn
 
 class Conv(nn.Module):
     # Standard convolution with args(ch_in, ch_out, kernel, stride, padding, groups, dilation, activation)
@@ -140,8 +140,7 @@ class BaseBEVBackbone(nn.Module):
         self.num_bev_features = c_in
         self.quantize = quantize
         if quantize:
-            # self.concat = bstnn.CatChannel()
-            self.concat = nn.quantized.FloatFunctional()
+            self.cat1 = bstnn.CatChannel()
             self.quant = torch.quantization.QuantStub()
 
     def preprocess(self, data_dict):
@@ -176,11 +175,11 @@ class BaseBEVBackbone(nn.Module):
                 ups.append(x)
 
         if len(ups) > 1:
-            x = torch.cat(ups, dim=1)
-            # if self.quantize:
-            #     x = self.concat(*ups)                
-            # else:
-            #     x = torch.cat(ups, dim=1)
+            # x = torch.cat(ups, dim=1)
+            if self.quantize:
+                x = self.cat1(*ups)                
+            else:
+                x = torch.cat(ups, dim=1)
         elif len(ups) == 1:
             x = ups[0]
 

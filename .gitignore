@@ -16,3 +16,8 @@ venv/
 output
 version.py
 checkpoints/
+.DS_Store
+._.DS_Store
+fuse_modules_debug.*
+link_module_debug.*
+pre_bind_debug.*
