@@ -22,3 +22,4 @@ fuse_modules_debug.*
 link_module_debug.*
 alignment_debug.*
 pre_bind_debug.*
+debug_*
