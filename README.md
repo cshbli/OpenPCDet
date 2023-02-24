@@ -261,6 +261,43 @@ Non_motor_vehicles:49.3936
 Pedestrians:0.0000
 ```
 
+## QAT
+
+### Training
+
+```
+python train_qat.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml \
+--ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth --batch_size 4 \
+--output_dir ../output/leishen_models/qat_conv_no_quant --epochs 2
+```
+
+output:
+```
+Car:66.3447
+Truck:67.8153
+Bus:0.0000
+Non_motor_vehicles:14.7929
+Pedestrians:0.0000
+```
+
+### Testing
+
+```
+python test_qat.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml \
+--ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth \
+--ckpt_qat ../output/leishen_models/qat_conv_no_quant/ckpt/checkpoint_epoch_2.pth \
+--batch_size 4 --output_dir ../output/leishen_models/qat_conv_no_quant
+```
+
+output:
+```
+Car:66.3447
+Truck:67.8153
+Bus:0.0000
+Non_motor_vehicles:14.7929
+Pedestrians:0.0000
+```
+
 ## Float model Structure
 
 ```
