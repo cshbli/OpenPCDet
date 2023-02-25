@@ -273,10 +273,10 @@ python train_qat.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yam
 
 output:
 ```
-Car:66.3447
-Truck:67.8153
+Car:18.1818
+Truck:9.0909
 Bus:0.0000
-Non_motor_vehicles:14.7929
+Non_motor_vehicles:0.0000
 Pedestrians:0.0000
 ```
 
@@ -291,10 +291,10 @@ python test_qat.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml
 
 output:
 ```
-Car:66.3447
-Truck:67.8153
+Car:75.8186
+Truck:70.4230
 Bus:0.0000
-Non_motor_vehicles:14.7929
+Non_motor_vehicles:34.9364
 Pedestrians:0.0000
 ```
 

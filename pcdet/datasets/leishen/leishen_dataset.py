@@ -45,8 +45,8 @@ class LeishenDataset(DatasetTemplate):
                 infos = pickle.load(f)
                 # import random
                 # infos = random.sample(infos, 1)
-                # infos = infos[3624:3684]
-                infos = infos[3650:3651]
+                infos = infos[3624:3684]
+                # infos = infos[3650:3651]
                 leishen_infos.extend(infos)
 
         self.leishen_infos.extend(leishen_infos)

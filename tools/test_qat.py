@@ -33,7 +33,8 @@ from pcdet.datasets import build_dataloader
 from pointpillar_estimator import PointPillarEstimator
 from pcdet.optimization import build_optimizer, build_scheduler
 
-from torch_intermediate_layer_getter import IntermediateLayerGetter as MidGetter
+# Only necessary if we want to get intermediate layer output
+# from torch_intermediate_layer_getter import IntermediateLayerGetter as MidGetter
 
 def get_arguments():
     parser = argparse.ArgumentParser()
@@ -138,11 +139,13 @@ def main():
             batch_dict = prepared_model.preprocess(batch_dict)
             return_layers = {
                 'backbone_2d.quant': 'input_quant',
-            }
-            mid_getter = MidGetter(prepared_model, return_layers=return_layers, keep_output=True)
-            # (batch_dict['cls_preds'], batch_dict['box_preds'], batch_dict['dir_cls_preds']) = prepared_model(batch_dict['spatial_features'])
-            mid_outputs, (batch_dict['cls_preds'], batch_dict['box_preds'], batch_dict['dir_cls_preds']) = mid_getter(batch_dict['spatial_features'])
-            np.save("input_quant", mid_outputs['input_quant'].cpu().numpy())
+            }            
+            (batch_dict['cls_preds'], batch_dict['box_preds'], batch_dict['dir_cls_preds']) = prepared_model(batch_dict['spatial_features'])
+            # For getting intermediate outputs from Torch model
+            # mid_getter = MidGetter(prepared_model, return_layers=return_layers, keep_output=True)
+            # mid_outputs, (batch_dict['cls_preds'], batch_dict['box_preds'], batch_dict['dir_cls_preds']) = mid_getter(batch_dict['spatial_features'])
+            # np.save("input", batch_dict['spatial_features'].cpu().numpy())
+            # np.save("input_quant", mid_outputs['input_quant'].cpu().numpy())
             pred_dicts, ret_dict = prepared_model.postprocess(batch_dict)
             # for i in range(len(pred_dicts)):
             #     pred_dicts[i]['frame_id'] = batch_dict['frame_id'][i]

@@ -26,9 +26,14 @@ def quantize_model(model, device, backend='default', sample_data=None):
     elif backend == 'bst':
         import bstnnx_training.PyTorch.QAT.core as quantizer
 
+        # Conv is quantized with rounding on hardware
         bst_activation_quant_int8 = quantizer.fake_quantize.FakeQuantize.with_args(
             observer=quantizer.observer.MovingAverageMinMaxObserver.with_args(dtype=torch.qint8), 
             quant_min=-128, quant_max=127, dtype=torch.qint8, qscheme=torch.per_tensor_affine, reduce_range=False)
+        # Input is quantized with truncating on hardware
+        bst_activation_quant_int8_truncate = quantizer.fake_quantize.FakeQuantize.with_args(
+            observer=quantizer.observer.MovingAverageMinMaxObserver.with_args(dtype=torch.qint8), 
+            quant_min=-128, quant_max=127, dtype=torch.qint8, rounding='truncate', qscheme=torch.per_tensor_affine, reduce_range=False)
         bst_activation_quant_uint8 = quantizer.fake_quantize.FakeQuantize.with_args(
             observer=quantizer.observer.MovingAverageMinMaxObserver.with_args(dtype=torch.quint8), 
             quant_min=0, quant_max=255, dtype=torch.quint8, qscheme=torch.per_tensor_affine, reduce_range=False)
@@ -45,8 +50,8 @@ def quantize_model(model, device, backend='default', sample_data=None):
         # Disable quantizations of all activations, such as after "Conv+BN", "Conv", "Concat" and "ReLU" etc.
         model.qconfig = quantizer.QConfig(activation=nn.Identity, weight=bst_weight_quant, qconfig_dict=b0_pre_bind_qconfig)
 
-        # Enable INT8 quantization for input
-        model.backbone_2d.quant.qconfig = quantizer.QConfig(activation=bst_activation_quant_int8, weight=bst_weight_quant)
+        # Enable INT8 and Truncate quantization for input
+        model.backbone_2d.quant.qconfig = quantizer.QConfig(activation=bst_activation_quant_int8_truncate, weight=bst_weight_quant)
 
         # Enable UINT8 quantizations after all ReLUs
         for relu_module_idx in [2, 5]:
