@@ -21,3 +21,4 @@ checkpoints/
 fuse_modules_debug.*
 link_module_debug.*
 pre_bind_debug.*
+*.npy

@@ -157,8 +157,14 @@ class BaseBEVBackbone(nn.Module):
         spatial_features = data_dict['spatial_features']
         if self.model_cfg.USE_ONNX is True:
             spatial_features_onnx = spatial_features.cpu().detach().numpy()
+            # For layer by layer comparison between ONNX and Torch model
+            # np.save("onnx_input", spatial_features_onnx)
             onnx_outs = self.ort_session.run(None, {self.model_cfg.INPUT: spatial_features_onnx})
             onnx_outs = np.concatenate(onnx_outs, axis=1)
+            # For layer by layer comparsion between ONNX and Torch model, ONNX model is modified to expand one extra output
+            # input_quant = onnx_outs[3]
+            # np.save("onnx_input_quant", input_quant)            
+            # onnx_outs = np.concatenate(onnx_outs[0:3], axis=1)
             spatial_features_2d = torch.from_numpy(onnx_outs).to('cuda:0')
             data_dict['spatial_features_2d'] = spatial_features_2d
             return data_dict

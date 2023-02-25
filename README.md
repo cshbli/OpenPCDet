@@ -187,7 +187,25 @@ Non_motor_vehicles:22.5661
 Pedestrians:0.0000
 ```
 
-* The acurracy of the exported ONNX model is very close to the QAT PyTorch model.        
+* The acurracy of the exported ONNX model is very close to the QAT PyTorch model.
+
+## QAT without Conv quantization
+
+```
+python test.py --cfg_file cfgs/leishen_models/pp_robosense_baseline_onnx.yaml --batch_size 1 \
+--ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth
+```
+
+output:
+
+```
+Car:75.8186
+Truck:70.4230
+Bus:0.0000
+Non_motor_vehicles:34.9364
+Pedestrians:0.0000
+```
+
 ## Float model Structure
 
 ```
