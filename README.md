@@ -298,6 +298,71 @@ Non_motor_vehicles:34.9364
 Pedestrians:0.0000
 ```
 
+## QAT on 95 server
+
+### Training
+
+```
+bash ~/ls_qat_1.sh
+```
+
+In the "jasonchen/leishen_qat" branch
+
+```
+python train_qat_hongbing.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml --ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth --batch_size 24 --output_dir ../output_hongbing --epochs 2 
+```
+
+start epoch is 0
+
+```  
+Epoch 0 Average Loss=8.8152
+Epoch 1 Average Loss=8.0318
+```
+
+### Testing
+
+```
+python test_qat_hongbing.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml --ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth --ckpt_qat ../output_hongbing/ckpt/checkpoint_epoch_2.pth --batch_size 24 --output_dir ../output_hongbing
+```
+
+```
+Car:70.6147
+Truck:65.0209
+Bus:14.6141
+Non_motor_vehicles:37.3392
+Pedestrians:0.0000
+```
+
+### Conversion with BSTNNX
+
+copy `quant_param_dict.jason` and `torch_frozen_model.onnx`
+
+```
+bstnnx_run --config /bsnn/users/hongbing/tests/PointPillar/job.yaml --result_dir /bsnn/users/hongbing/tests/PointPillar/result --extra priority_range=100-300 --extra resume_from_breakpoint=False
+```
+
+copy 300 stage output `quant_model.onnx`
+
+### ONNX Testing
+
+switch to branch: `jasonchen/leishen_onnx_a1000b0`
+
+```
+python setup.py develop
+```
+
+```
+python test.py --cfg_file ../tools/cfgs/leishen_models/pp_robosense_baseline_onnx.yaml --batch_size 1 --ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth
+```
+
+```
+Car:70.6147
+Truck:65.0209
+Bus:14.6141
+Non_motor_vehicles:37.3392
+Pedestrians:0.0000
+```
+
 ## Float model Structure
 
 ```
