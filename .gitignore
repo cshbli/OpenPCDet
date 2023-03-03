@@ -15,3 +15,8 @@ venv/
 *.bin
 output
 version.py
+checkpoints/
+.DS_Store
+._.DS_Store
+debug_*
+*.npy
