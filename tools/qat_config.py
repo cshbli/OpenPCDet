@@ -5,7 +5,7 @@ import torch.nn as nn
 BIAS_QUANT_MIN = -2 ** 23
 BIAS_QUANT_MAX = 2 ** 23 - 1
 
-def quantize_model(model, device, backend='default', sample_data=None):
+def quantize_model(model, device, backend='default', per_channel=True, sample_data=None):
     model.to(device)
     model.train()
     if backend == 'default':
@@ -37,9 +37,14 @@ def quantize_model(model, device, backend='default', sample_data=None):
         bst_activation_quant_uint8 = quantizer.fake_quantize.FakeQuantize.with_args(
             observer=quantizer.observer.MovingAverageMinMaxObserver.with_args(dtype=torch.quint8), 
             quant_min=0, quant_max=255, dtype=torch.quint8, qscheme=torch.per_tensor_affine, reduce_range=False)
-        bst_weight_quant = quantizer.fake_quantize.FakeQuantize.with_args(
-            observer=quantizer.observer.MovingAverageMinMaxObserver.with_args(dtype=torch.qint8), 
-            quant_min=-128, quant_max=127, dtype=torch.qint8, qscheme=torch.per_tensor_affine, reduce_range=False)
+        if per_channel: 
+            bst_weight_quant = quantizer.fake_quantize.FakeQuantize.with_args(
+                observer=quantizer.observer.MovingAveragePerChannelMinMaxObserver.with_args(dtype=torch.qint8), 
+                quant_min=-128, quant_max=127, dtype=torch.qint8, qscheme=torch.per_channel_affine, reduce_range=False)
+        else:
+            bst_weight_quant = quantizer.fake_quantize.FakeQuantize.with_args(
+                observer=quantizer.observer.MovingAverageMinMaxObserver.with_args(dtype=torch.qint8), 
+                quant_min=-128, quant_max=127, dtype=torch.qint8, qscheme=torch.per_tensor_affine, reduce_range=False)
 
         # 1) [bst_alignment] get b0 pre-bind qconfig adjusting Conv's activation quant scheme        
         b0_pre_bind_qconfig = quantizer.pre_bind(model, input_tensor=sample_data.to('cpu'), debug_mode=True, observer_scheme_dict={"weight_scheme": "MovingAverageMinMaxObserver", "activation_scheme": "MovingAverageMinMaxObserver"})

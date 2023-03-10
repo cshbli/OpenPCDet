@@ -45,238 +45,24 @@ Non_motor_vehicles:65.6314
 Pedestrians:0.0000
 ```
 
-### QAT model baseline
+## QAT per tensor
 
-### Test the QAT model
+### Training 
 
-```
-python test_qat_xinrui.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml \
---ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth \
---ckpt_qat ../checkpoints/leishen/qat/checkpoint_epoch_25.pth \
---cwd ~/Projects/OpenPCDet/tools --batch_size 6 \
---output_dir ../output/leishen_models/qat_baseline
-```
-
-output:
-```
-Car:82.9962
-Truck:71.6373
-Bus:33.1491
-Non_motor_vehicles:51.7760
-Pedestrians:0.0000
-```
-
-### Test the QAT model by disable quantizations after Conv
-
-```
-test_qat_xinrui.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml \
---ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth \ --ckpt_qat /barn4/jishengchen/for_hongbing/per_tensor_minmax_no_quantile/checkpoint_epoch_25.pth \
---batch_size 24 --output_dir ../output_no_conv_quant
-```
-
-output:
-
-```
-Car:43.3007
-Truck:37.1900
-Bus:3.6364
-Non_motor_vehicles:23.8711
-Pedestrians:0.0000
-```
-
-### Train one epoch
-
-```
-python train_qat_xinrui.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml \
---ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth \
---pretrained_model ../checkpoints/leishen/qat/checkpoint_epoch_25.pth \
---cwd /home/hongbing/Projects/OpenPCDet/tools \
---batch_size 4 --output_dir ../output_minmax --epochs 1
-```
-output: 
-
-```
-Car:50.4889
-Truck:40.8658
-Bus:0.4545
-Non_motor_vehicles:14.6391
-Pedestrians:0.0000
-```
-
-### Train one epoch without activation quantization
-
-```
-python train_qat_xinrui.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml \
---ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth \
---pretrained_model ../checkpoints/leishen/qat/checkpoint_epoch_25.pth \
---batch_size 4 --output_dir ../output_minmax --epochs 1
-```
-output: 
-
-```
-Car:68.3408
-Truck:34.3958
-Bus:9.0909
-Non_motor_vehicles:22.5743
-Pedestrians:0.0000
-```
-
-* Evaluate the exported ONNX model inside `leishen_onnx` branch
-
-```
-python test.py --cfg_file ../tools/cfgs/leishen_models/pp_robosense_baseline_onnx_per_tensor.yaml --batch_size 1 --ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth
-```
-
-output: 
-
-```
-Car:68.3894
-Truck:34.9785
-Bus:9.0909
-Non_motor_vehicles:22.5661
-Pedestrians:0.0000
-```
-
-* The acurracy of the exported ONNX model is very close to the QAT PyTorch model.
-
-### Train one epoch without activation quantization starting from float model
-
-```
-python train_qat_xinrui.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml \
---ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth \
---batch_size 4 --output_dir ../output/leishen_models/qat_no_activation_quant_from_float --epochs 1 
-```
-
-output:
-
-```
-Car:65.3343
-Truck:56.7995
-Bus:3.6335
-Non_motor_vehicles:23.4490
-Pedestrians:0.0000
-```
-
-* Compared to the loading from pretrained QAT model, there have not too much differences.
-
-## Train without Conv Quant
-
-### UINT8 after ReLU
-
-```
-python train_qat_xinrui.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml \
---ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth \
---batch_size 24 --output_dir ../output_hongbing_no_conv_quant --epochs 25
-```
-
-Training log:
-
-```
-Epoch 0 Average Loss=8.8575
-Epoch 1 Average Loss=7.9371
-Epoch 2 Average Loss=7.3167
-Epoch 3 Average Loss=6.8873
-Epoch 4 Average Loss=6.8032
-Epoch 5 Average Loss=6.3705
-Epoch 6 Average Loss=6.0901
-Epoch 7 Average Loss=6.0290
-Epoch 8 Average Loss=5.7352
-Epoch 9 Average Loss=5.7318
-Epoch 10 Average Loss=5.2275
-Epoch 11 Average Loss=5.0312
-Epoch 12 Average Loss=4.7033
-Epoch 13 Average Loss=4.4788
-Epoch 14 Average Loss=4.2745
-Epoch 15 Average Loss=3.8741
-Epoch 16 Average Loss=3.9344
-Epoch 17 Average Loss=3.8669
-Epoch 18 Average Loss=3.7537
-Epoch 19 Average Loss=3.4595
-Epoch 20 Average Loss=3.7056
-Epoch 21 Average Loss=3.6252
-Epoch 22 Average Loss=3.6571
-Epoch 23 Average Loss=3.4010
-Epoch 24 Average Loss=3.4123
-Training is Done
-
-Start evaluation...
-2023-02-21 05:12:16,779   INFO  ********************** Evaluation results  **********************
-
-2023-02-21 05:12:16,781   INFO  Car:70.0317
-Truck:49.2403
-Bus:3.4887
-Non_motor_vehicles:20.2594
-Pedestrians:0.0000
-```
-
-### checkpoint 25
-
-```
-python test_qat_xinrui.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml --ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth --ckpt_qat ../output_hongbing_no_conv_quant/ckpt/checkpoint_epoch_25.pth --batch_size 24 --output_dir ../output_no_conv_quant
-```
-
-```
-Car:70.0317
-Truck:49.2403
-Bus:3.4887
-Non_motor_vehicles:20.2594
-Pedestrians:0.0000
-```
-
-### checkpoint 1
-
-```
-python test_qat_xinrui.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml --ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth --ckpt_qat ../output_hongbing_no_conv_quant/ckpt/checkpoint_epoch_1.pth --batch_size 24 --output_dir ../output_no_conv_quant
-```
-
-```
-Car:76.7208
-Truck:71.2916
-Bus:15.8447
-Non_motor_vehicles:51.0582
-Pedestrians:0.0000
-```
-
-### checkpoint 2
-
-```
-python test_qat_xinrui.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml --ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth --ckpt_qat ../output_hongbing_no_conv_quant/ckpt/checkpoint_epoch_2.pth --batch_size 24 --output_dir ../output_no_conv_quant
-```
-
-```
-Car:71.2157
-Truck:65.7383
-Bus:16.2125
-Non_motor_vehicles:40.0628
-Pedestrians:0.0000
-```
-
-BSTNNX 300 stage ONNX model
-
-```
-Car:76.4099
-Truck:70.9944
-Bus:17.5325
-Non_motor_vehicles:49.3936
-Pedestrians:0.0000
-```
-
-## QAT
-
-### Training
+With 60 data samples from `infos = infos[3624:3684]`
 
 ```
 python train_qat.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml \
 --ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth --batch_size 4 \
---output_dir ../output/leishen_models/qat_conv_no_quant --epochs 2
+--output_dir ../output/leishen_models/qat_per_tensor --epochs 2
 ```
 
 output:
 ```
-Car:18.1818
-Truck:9.0909
+Car:70.2122
+Truck:69.5722
 Bus:0.0000
-Non_motor_vehicles:0.0000
+Non_motor_vehicles:8.5712
 Pedestrians:0.0000
 ```
 
@@ -285,16 +71,55 @@ Pedestrians:0.0000
 ```
 python test_qat.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml \
 --ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth \
---ckpt_qat ../output/leishen_models/qat_conv_no_quant/ckpt/checkpoint_epoch_2.pth \
+--ckpt_qat ../output/leishen_models/qat_per_tensor/ckpt/checkpoint_epoch_2.pth \
 --batch_size 4 --output_dir ../output/leishen_models/qat_conv_no_quant
 ```
 
 output:
 ```
-Car:75.8186
-Truck:70.4230
+Car:70.2122
+Truck:69.5722
 Bus:0.0000
-Non_motor_vehicles:34.9364
+Non_motor_vehicles:8.5712
+Pedestrians:0.0000
+```
+
+## QAT per channel
+
+### Training 
+
+With 60 data samples from `infos = infos[3624:3684]`
+
+```
+python train_qat.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml \
+--ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth --batch_size 4 \
+--output_dir ../output/leishen_models/qat_per_channel --epochs 2
+```
+
+output:
+```
+Car:71.9900
+Truck:69.9686
+Bus:0.0000
+Non_motor_vehicles:7.6891
+Pedestrians:0.0000
+```
+
+### Testing
+
+```
+python test_qat.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml \
+--ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth \
+--ckpt_qat ../output/leishen_models/qat_per_channel/ckpt/checkpoint_epoch_2.pth \
+--batch_size 4 --output_dir ../output/leishen_models/qat_conv_no_quant
+```
+
+output:
+```
+Car:71.9900
+Truck:69.9686
+Bus:0.0000
+Non_motor_vehicles:7.6891
 Pedestrians:0.0000
 ```
 
@@ -310,6 +135,71 @@ In the "jasonchen/leishen_qat" branch
 
 ```
 python train_qat_hongbing.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml --ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth --batch_size 24 --output_dir ../output_hongbing --epochs 2 
+```
+
+start epoch is 0
+
+```  
+Epoch 0 Average Loss=8.8152
+Epoch 1 Average Loss=8.0318
+```
+
+### Testing
+
+```
+python test_qat_hongbing.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml --ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth --ckpt_qat ../output_hongbing/ckpt/checkpoint_epoch_2.pth --batch_size 24 --output_dir ../output_hongbing
+```
+
+```
+Car:70.6147
+Truck:65.0209
+Bus:14.6141
+Non_motor_vehicles:37.3392
+Pedestrians:0.0000
+```
+
+### Conversion with BSTNNX
+
+copy `quant_param_dict.jason` and `torch_frozen_model.onnx`
+
+```
+bstnnx_run --config /bsnn/users/hongbing/tests/PointPillar/job.yaml --result_dir /bsnn/users/hongbing/tests/PointPillar/result --extra priority_range=100-300 --extra resume_from_breakpoint=False
+```
+
+copy 300 stage output `quant_model.onnx`
+
+### ONNX Testing
+
+switch to branch: `jasonchen/leishen_onnx_a1000b0`
+
+```
+python setup.py develop
+```
+
+```
+python test.py --cfg_file ../tools/cfgs/leishen_models/pp_robosense_baseline_onnx.yaml --batch_size 1 --ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth
+```
+
+```
+Car:70.6147
+Truck:65.0209
+Bus:14.6141
+Non_motor_vehicles:37.3392
+Pedestrians:0.0000
+```
+
+## QAT per-channel on 95 server
+
+### Training
+
+```
+bash ~/ls_qat_1.sh
+```
+
+In the "jasonchen/leishen_qat" branch
+
+```
+python train_qat_hongbing.py --config cfgs/leishen_models/pp_robosense_baseline_qat_0.yaml --ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth --batch_size 24 --output_dir ../output_hongbing_per_channel --epochs 2 
 ```
 
 start epoch is 0
