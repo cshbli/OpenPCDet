@@ -49,64 +49,7 @@ Non_motor_vehicles:80.0150
 Pedestrians:0.0000
 ```
 
-## QAT model baseline
-
-### QAT PyTorch model accuracy from `leishen_qat` branch test
-
-```
-Car:82.9962
-Truck:71.6373
-Bus:33.1491
-Non_motor_vehicles:51.7760
-Pedestrians:0.0000
-```
-
-### Test the exported ONNX model from QAT
-
-Please note the onnx model path is specified in the `pp_robosense_baseline_onnx.yaml` as:
-
-The "torch_frozen_model.onnx" was exported from QAT model "checkpoint_epoch_25.pth".
-
-```
-    BACKBONE_2D:
-        NAME: BaseBEVBackbone
-        LAYER_NUMS: [3, 5]
-        LAYER_STRIDES: [2, 2]
-        NUM_FILTERS: [64, 128]
-        UPSAMPLE_STRIDES: [1, 2]
-        NUM_UPSAMPLE_FILTERS: [128, 128]
-        USE_ONNX: True
-        # PATH: /home/hongbing/Projects/OpenPCDet/checkpoints/leishen/leishen_float_model.onnx        
-        # INPUT: inputs        
-        PATH: /home/hongbing/Projects/OpenPCDet/checkpoints/leishen/qat/torch_frozen_model.onnx
-        INPUT: X.1
-```
-
-```
-python test.py --cfg_file cfgs/leishen_models/pp_robosense_baseline_onnx.yaml --batch_size 1 --ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth
-```
-
-output:
-```
-4950/4950 [19:17<00:00,  4.28it/s, recall_0.3=(0, 24406) / 53122]
-2023-02-20 06:00:11,653   INFO  *************** Performance of EPOCH 30 *****************
-2023-02-20 06:00:11,654   INFO  Generate label finished(sec_per_example: 0.2339 second).
-2023-02-20 06:00:11,654   INFO  recall_roi_0.3: 0.000000
-2023-02-20 06:00:11,654   INFO  recall_rcnn_0.3: 0.459433
-2023-02-20 06:00:11,654   INFO  recall_roi_0.5: 0.000000
-2023-02-20 06:00:11,654   INFO  recall_rcnn_0.5: 0.366835
-2023-02-20 06:00:11,654   INFO  recall_roi_0.7: 0.000000
-2023-02-20 06:00:11,654   INFO  recall_rcnn_0.7: 0.211363
-2023-02-20 06:00:11,661   INFO  Average predicted number of objects(4950 samples): 8.163
-
-Car:53.7145
-Truck:56.3324
-Bus:14.5022
-Non_motor_vehicles:44.6367
-Pedestrians:0.0000
-```
-
-The exported onnx model has a big accuracy drop compared to PyTorch model.
+## QAT per-channel model with 60 samples
 
 ### Test the BSTNNX ONNX model
 
@@ -123,9 +66,7 @@ The "quant_model.onnx" was exported from QAT model "checkpoint_epoch_25.pth".
         UPSAMPLE_STRIDES: [1, 2]
         NUM_UPSAMPLE_FILTERS: [128, 128]
         USE_ONNX: True
-        # PATH: /home/hongbing/Projects/OpenPCDet/checkpoints/leishen/leishen_float_model.onnx        
-        # INPUT: inputs        
-        PATH: /home/hongbing/Projects/OpenPCDet/checkpoints/leishen/qat/quant_model.onnx
+        PATH: /home/hongbing/Projects/OpenPCDet_onnx/output/leishen_models/qat_per_channel/quant_model.onnx        
         INPUT: X.1
 ```
 
@@ -135,74 +76,21 @@ python test.py --cfg_file cfgs/leishen_models/pp_robosense_baseline_onnx.yaml --
 
 output:
 ```
-4950/4950 [17:47<00:00,  4.64it/s, recall_0.3=(0, 20305) / 53122]
-2023-02-20 05:37:07,516   INFO  *************** Performance of EPOCH 30 *****************
-2023-02-20 05:37:07,517   INFO  Generate label finished(sec_per_example: 0.2157 second).
-2023-02-20 05:37:07,517   INFO  recall_roi_0.3: 0.000000
-2023-02-20 05:37:07,517   INFO  recall_rcnn_0.3: 0.382233
-2023-02-20 05:37:07,517   INFO  recall_roi_0.5: 0.000000
-2023-02-20 05:37:07,517   INFO  recall_rcnn_0.5: 0.314822
-2023-02-20 05:37:07,517   INFO  recall_roi_0.7: 0.000000
-2023-02-20 05:37:07,517   INFO  recall_rcnn_0.7: 0.163285
-2023-02-20 05:37:07,529   INFO  Average predicted number of objects(4950 samples): 6.395
+60/60 [01:28<00:00,  1.47s/it, recall_0.3=(0, 526) / 721]
+2023-03-09 20:19:01,570   INFO  *************** Performance of EPOCH 30 *****************
+2023-03-09 20:19:01,570   INFO  Generate label finished(sec_per_example: 1.4693 second).
+2023-03-09 20:19:01,570   INFO  recall_roi_0.3: 0.000000
+2023-03-09 20:19:01,570   INFO  recall_rcnn_0.3: 0.729542
+2023-03-09 20:19:01,570   INFO  recall_roi_0.5: 0.000000
+2023-03-09 20:19:01,570   INFO  recall_rcnn_0.5: 0.542302
+2023-03-09 20:19:01,570   INFO  recall_roi_0.7: 0.000000
+2023-03-09 20:19:01,570   INFO  recall_rcnn_0.7: 0.184466
+2023-03-09 20:19:01,570   INFO  Average predicted number of objects(60 samples): 95.033
 
-Car:51.4447
-Truck:43.4287
-Bus:3.8961
-Non_motor_vehicles:27.8377
-Pedestrians:0.0000
-```
-
-The exported onnx model has a big accuracy drop compared to PyTorch model.
-
-## QAT without activation quantization 
-
-```
-    BACKBONE_2D:
-        NAME: BaseBEVBackbone
-        LAYER_NUMS: [3, 5]
-        LAYER_STRIDES: [2, 2]
-        NUM_FILTERS: [64, 128]
-        UPSAMPLE_STRIDES: [1, 2]
-        NUM_UPSAMPLE_FILTERS: [128, 128]
-        USE_ONNX: True
-        # PATH: /barn4/jishengchen/for_hongbing/per_tensor_minmax_no_quantile/torch_frozen_model.onnx
-        # INPUT: X.1
-        PATH: /barn4/jishengchen/code/leishen_codebase/OpenPCDet/output/leishen_models/qat_no_activation_quant/debug_inferred_model.onnx
-        INPUT: input.1
-```
-
-```
-python test.py --cfg_file ../tools/cfgs/leishen_models/pp_robosense_baseline_onnx_per_tensor.yaml --batch_size 1 \
---ckpt ../output/tools/cfgs/leishen_models/pp_robosense_baseline_test/default/ckpt/checkpoint_epoch_30.pth
-```
-
-output: 
-
-```
-Car:68.3894
-Truck:34.9785
-Bus:9.0909
-Non_motor_vehicles:22.5661
-Pedestrians:0.0000
-```
-
-* The acurracy of the exported ONNX model is very close to the QAT PyTorch model.
-
-## QAT without Conv quantization
-
-```
-python test.py --cfg_file cfgs/leishen_models/pp_robosense_baseline_onnx.yaml --batch_size 1 \
---ckpt ../checkpoints/leishen/checkpoint_epoch_30.pth
-```
-
-output:
-
-```
-Car:75.8186
-Truck:70.4230
+Car:71.9900
+Truck:69.9686
 Bus:0.0000
-Non_motor_vehicles:34.9364
+Non_motor_vehicles:7.6891
 Pedestrians:0.0000
 ```
 

@@ -88,7 +88,8 @@ class BaseBEVBackbone(nn.Module):
         if "USE_ONNX" in self.model_cfg and self.model_cfg.USE_ONNX is True:
             import onnxruntime as ort
             print("using ONNX")
-            self.ort_session = ort.InferenceSession(self.model_cfg.PATH)
+            providers = ["TensorrtExecutionProvider", "CUDAExecutionProvider"]
+            self.ort_session = ort.InferenceSession(self.model_cfg.PATH, providers=providers)
 
     def forward_train(self, data_dict):
         """
